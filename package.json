@@ -1,0 +1,41 @@
+{
+  "name": "prophet-kevin-online",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prophet Kevin Online — iOS/Android member app (Capacitor), creator dashboard and API for the Apostolic Gospel Mission.",
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "build": "tsc -p tsconfig.app.json && tsc -p tsconfig.admin.json",
+    "start": "node server/src/index.ts",
+    "dev": "npm run build && node --watch-path=server/src server/src/index.ts",
+    "watch:web": "tsc -p tsconfig.app.json --watch & tsc -p tsconfig.admin.json --watch",
+    "typecheck": "npm run build && tsc -p tsconfig.server.json",
+    "test": "npm run build && node --test --test-concurrency=1 tests/api/api.test.ts tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
+    "test:api": "node --test tests/api/api.test.ts",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
+    "native:sync": "npm run build && node scripts/native-sync.mjs",
+    "native:ios": "npm run native:sync && npx cap open ios",
+    "native:android": "npm run native:sync && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@types/node": "^22.0.0",
+    "playwright": "^1.50.0",
+    "typescript": "^5.8.0"
+  }
+}

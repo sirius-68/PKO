@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "rootDir": "src/admin", "outDir": "admin/js" },
+  "include": ["src/admin/**/*.ts"]
+}
