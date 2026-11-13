@@ -10,14 +10,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.app.json && tsc -p tsconfig.admin.json",
     "config": "node scripts/write-config.mjs",
-    "test": "npm run build && node --test --test-concurrency=1 tests/backend.test.ts tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
+    "test": "npm run build && node --test --test-concurrency=1 tests/backend.test.ts tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts tests/e2e/demo.e2e.ts",
     "test:backend": "node --test tests/backend.test.ts",
     "test:e2e": "npm run build && node --test --test-concurrency=1 tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
     "dev": "npm run build && node --no-warnings scripts/dev.ts",
     "native:sync": "npm run build && node scripts/native-sync.mjs",
     "android:apk": "npm run native:sync && cd android && ./gradlew assembleDebug",
     "native:android": "npm run native:sync && npx cap open android",
-    "native:ios": "npm run native:sync && npx cap open ios"
+    "native:ios": "npm run native:sync && npx cap open ios",
+    "android:demo": "npm run build && DEMO=1 node scripts/write-config.mjs && node scripts/build-demo.mjs && npx cap sync android && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

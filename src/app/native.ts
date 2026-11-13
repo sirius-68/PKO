@@ -6,10 +6,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyPlugin = Record<string, (...a: any[]) => Promise<any>> & { addListener?: (ev: string, cb: (e: any) => void) => Promise<{ remove: () => void }> | { remove: () => void } };
 
-interface CapacitorGlobal { isNativePlatform?: () => boolean; getPlatform?: () => string; Plugins?: Record<string, AnyPlugin> }
+interface CapacitorGlobal { isNativePlatform?: () => boolean; getPlatform?: () => string; Plugins?: Record<string, AnyPlugin>; registerPlugin?: (name: string) => AnyPlugin }
 const cap = (): CapacitorGlobal | undefined => (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
-const plugin = (name: string): AnyPlugin | undefined => cap()?.Plugins?.[name];
+const registered: Record<string, AnyPlugin | undefined> = {};
+/** Native plugin proxy. Native builds load @capacitor/core (capacitor.js), whose registerPlugin wires calls to the native side. */
+const plugin = (name: string): AnyPlugin | undefined => {
+  const c = cap();
+  if (!c) return undefined;
+  if (c.Plugins?.[name]) return c.Plugins[name];
+  if (name in registered) return registered[name];
+  registered[name] = c.isNativePlatform?.() && c.registerPlugin ? c.registerPlugin(name) : undefined;
+  return registered[name];
+};
 
+export const hasPlugin = (name: string): boolean => !!plugin(name);
 export const isNative = (): boolean => !!cap()?.isNativePlatform?.();
 export const platform = (): string => cap()?.getPlatform?.() || 'web';
 

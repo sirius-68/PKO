@@ -1,5 +1,6 @@
 import { $, $$, html, ic, mmss, avColor, setHTML, esc } from './lib.js';
-import { getLive, mediaUrl, supa } from './api.js';
+import { getLive, mediaUrl, supa, DEMO, chatHooks } from './api.js';
+import { demoChatStart, demoChatStop } from './demo.js';
 import { S } from './store.js';
 import { keepAwake } from './native.js';
 import { toast } from './ui.js';
@@ -280,7 +281,25 @@ async function loadRecent() {
     catch { /* offline: keep what we have */ }
 }
 /** Joins the live room: chat + live state changes (postgres_changes) and viewer presence. */
+let demoOn = false;
+function addMessage(m) {
+    if (messages.some((x) => x.id === m.id))
+        return;
+    messages.push(m);
+    if (messages.length > 80)
+        messages.shift();
+    appendChat(m);
+}
 export function startChat() {
+    if (DEMO) {
+        if (demoOn)
+            return;
+        demoOn = true;
+        chatHooks.local = addMessage;
+        messages = demoChatStart(addMessage, (n) => { viewers = n; paintViewers(); });
+        renderChat();
+        return;
+    }
     if (room || !supa.configured)
         return;
     loadRecent();
@@ -310,7 +329,10 @@ export function startChat() {
         loadRecent(); }) // catch up after a reconnect
         .track({ at: Date.now() });
 }
-export function stopChat() { room?.unsubscribe(); room = null; }
+export function stopChat() { if (demoOn) {
+    demoChatStop();
+    demoOn = false;
+} room?.unsubscribe(); room = null; }
 export function setViewers(n) { viewers = n; paintViewers(); }
 function paintViewers() {
     for (const x of $$('[data-viewers]')) {

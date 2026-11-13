@@ -7,3 +7,5 @@ test-results/
 ios/App/Pods/
 android/.gradle/
 android/app/build/
+app/demo/
+app/capacitor.js

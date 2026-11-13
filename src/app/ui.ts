@@ -1,5 +1,5 @@
 import { $, $$, ic, html, must, setHTML, type SafeHTML } from './lib.js';
-import { exitApp, isNative, onBackButton } from './native.js';
+import { exitApp, hasPlugin, isNative, onBackButton } from './native.js';
 
 /* ---------- toast ---------- */
 let tt: number | undefined;
@@ -105,7 +105,7 @@ export function handleBack(): boolean {
 }
 export function initBack(onRootBack: () => boolean): void {
   fallback = onRootBack;
-  const hasNativeBack = isNative() && !!(window as unknown as { Capacitor?: { Plugins?: { App?: unknown } } }).Capacitor?.Plugins?.App;
+  const hasNativeBack = isNative() && hasPlugin('App');
   if (hasNativeBack) {
     onBackButton(() => { if (!handleBack()) exitApp(); });
     return;

@@ -1,5 +1,5 @@
 import { $, $$, ic, html, must, setHTML } from './lib.js';
-import { exitApp, isNative, onBackButton } from './native.js';
+import { exitApp, hasPlugin, isNative, onBackButton } from './native.js';
 /* ---------- toast ---------- */
 let tt;
 export function toast(msg, kind = 'ok') {
@@ -110,7 +110,7 @@ export function handleBack() {
 }
 export function initBack(onRootBack) {
     fallback = onRootBack;
-    const hasNativeBack = isNative() && !!window.Capacitor?.Plugins?.App;
+    const hasNativeBack = isNative() && hasPlugin('App');
     if (hasNativeBack) {
         onBackButton(() => { if (!handleBack())
             exitApp(); });

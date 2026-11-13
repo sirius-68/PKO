@@ -1,5 +1,6 @@
 import { getItem, setItem } from './native.js';
 import { Supa, SupaError } from '../shared/supa.js';
+import * as demo from './demo.js';
 
 /* ---------- content types (mirror src/shared/schema.ts) ---------- */
 interface Base { id: string; publishedAt: string }
@@ -25,12 +26,14 @@ export interface ChatMsg { id: number; name: string; body: string; isMod: boolea
 export interface Member { id: string; name: string }
 
 /* ---------- Supabase connection ---------- */
-const cfg = (window as unknown as { PKO_CONFIG?: { supabaseUrl?: string; supabaseAnonKey?: string; appUrl?: string } }).PKO_CONFIG || {};
+const cfg = (window as unknown as { PKO_CONFIG?: { supabaseUrl?: string; supabaseAnonKey?: string; appUrl?: string; demo?: boolean } }).PKO_CONFIG || {};
+/** Demo build: bundled content, everything stays on the device (see demo.ts). */
+export const DEMO = !!cfg.demo;
 export const supa = new Supa(cfg.supabaseUrl || '', cfg.supabaseAnonKey || '', { get: getItem, set: setItem }, 'pko.session');
 export const ApiError = SupaError;
 export type ApiError = SupaError;
 
-export const mediaUrl = (id: string | null | undefined): string => (id ? (/^https?:\/\//.test(id) ? id : supa.publicUrl(id)) : '');
+export const mediaUrl = (id: string | null | undefined): string => (id ? (/^https?:\/\//.test(id) ? id : DEMO ? `demo/media/${id.split('/').pop()}` : supa.publicUrl(id)) : '');
 /** Link that opens the web app on a given screen (shared from the native app too). */
 export const shareUrl = (path: string): string => `${(cfg.appUrl || location.origin + location.pathname).replace(/#.*$/, '')}#${path}`;
 
@@ -45,7 +48,7 @@ export function cachedBundle(): Bundle | null {
   try { const s = getItem(CACHE_KEY); return s ? (JSON.parse(s) as Bundle) : null; } catch { return null; }
 }
 export async function fetchBundle(current: Bundle | null): Promise<{ bundle: Bundle; changed: boolean }> {
-  const b = await supa.rpc<Bundle>('get_bundle', {}, { anon: !supa.session });
+  const b = DEMO ? await demo.demoBundle() : await supa.rpc<Bundle>('get_bundle', {}, { anon: !supa.session });
   try { setItem(CACHE_KEY, JSON.stringify(b)); } catch { /* storage full: still usable in memory */ }
   const changed = !current || current.version !== b.version || JSON.stringify(current.amens) !== JSON.stringify(b.amens)
     || JSON.stringify(current.comments) !== JSON.stringify(b.comments) || JSON.stringify(current.live) !== JSON.stringify(b.live);
@@ -53,13 +56,14 @@ export async function fetchBundle(current: Bundle | null): Promise<{ bundle: Bun
 }
 
 /* ---------- reads ---------- */
-export const getChapter = (book: string, chapter: string) => supa.rpc<{ id: string; title: string; body: string[]; index: number }>('get_chapter', { p_book: book, p_chapter: chapter });
-export const getComments = (target: string) => supa.rpc<Comment[]>('get_comments', { p_target: target });
+export const getChapter = (book: string, chapter: string) => DEMO ? demo.demoChapter(book, chapter) : supa.rpc<{ id: string; title: string; body: string[]; index: number }>('get_chapter', { p_book: book, p_chapter: chapter });
+export const getComments = (target: string) => DEMO ? demo.demoComments(target) : supa.rpc<Comment[]>('get_comments', { p_target: target });
 export const getLive = () => supa.rpc<{ live: Live; messages: ChatMsg[] }>('get_live');
-export async function myAmens(): Promise<string[]> { return supa.session ? supa.rpc<string[]>('my_amens') : []; }
+export async function myAmens(): Promise<string[]> { return DEMO ? demo.demoMyAmens() : supa.session ? supa.rpc<string[]>('my_amens') : []; }
 
 /* ---------- member actions ---------- */
 export async function signInMember(name: string, phone: string): Promise<Member> {
+  if (DEMO) return demo.demoSignIn(name);
   await ensureSession();
   try { return await supa.rpc<Member>('set_profile', { p_name: name, p_phone: phone || null }); }
   catch (e) {
@@ -68,19 +72,25 @@ export async function signInMember(name: string, phone: string): Promise<Member>
     throw e;
   }
 }
-export async function signOutMember(): Promise<void> { await supa.signOut(); }
+export async function signOutMember(): Promise<void> { if (DEMO) return demo.demoSignOut(); await supa.signOut(); }
 export async function toggleAmen(target: string, on: boolean): Promise<{ on: boolean; count: number }> {
+  if (DEMO) return demo.demoToggleAmen(target, on);
   await ensureSession();
   return supa.rpc('toggle_amen', { p_target: target, p_on: on });
 }
-export const postComment = (target: string, body: string, parentId?: string | null) => supa.rpc<Comment>('post_comment', { p_target: target, p_body: body, p_parent: parentId || null });
-export const deleteComment = (id: string) => supa.rpc('delete_comment', { p_id: id });
-export const postChat = (body: string) => supa.rpc<ChatMsg>('post_chat', { p_body: body });
+export const postComment = (target: string, body: string, parentId?: string | null) => DEMO ? demo.demoPostComment(target, body, parentId) : supa.rpc<Comment>('post_comment', { p_target: target, p_body: body, p_parent: parentId || null });
+export const deleteComment = (id: string) => DEMO ? demo.demoDeleteComment(id) : supa.rpc('delete_comment', { p_id: id });
+export const chatHooks = { local: (_m: ChatMsg) => {} };
+export async function postChat(body: string): Promise<ChatMsg> {
+  if (DEMO) { const m = await demo.demoPostChat(body); chatHooks.local(m); return m; }
+  return supa.rpc<ChatMsg>('post_chat', { p_body: body });
+}
 export const submitTestimony = (t: { title: string; body: string; name?: string; place?: string; video?: string | null }) =>
-  supa.rpc<{ id: string; status: string }>('submit_testimony', { p_title: t.title, p_body: t.body, p_place: t.place || null, p_name: t.name || null, p_video: t.video || null });
+  DEMO ? Promise.resolve({ id: 'demo', status: 'pending' }) : supa.rpc<{ id: string; status: string }>('submit_testimony', { p_title: t.title, p_body: t.body, p_place: t.place || null, p_name: t.name || null, p_video: t.video || null });
 
 /** Members upload a testimony video into their own folder, then register it. */
 export async function uploadTestimonyVideo(file: File, onProgress: (p: number) => void): Promise<string> {
+  if (DEMO) { onProgress(1); return 'demo-video'; }
   if (!supa.session) throw new SupaError(401, 'Please sign in first');
   const ext = (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'mp4';
   const path = `members/${supa.session.user.id}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;

@@ -1,6 +1,6 @@
 import { $, $$, html, raw, ic, art, avi, fmt, mmss, ago, when, readMins, parseD, MONTHS, DOW, setHTML, type SafeHTML } from './lib.js';
 void supa;
-import { ApiError, mediaUrl, getComments, postComment, deleteComment as apiDeleteComment, getChapter, submitTestimony as apiSubmitTestimony, uploadTestimonyVideo, signInMember, signOutMember, supa, type Comment } from './api.js';
+import { ApiError, DEMO, mediaUrl, getComments, postComment, deleteComment as apiDeleteComment, getChapter, submitTestimony as apiSubmitTestimony, uploadTestimonyVideo, signInMember, signOutMember, supa, type Comment } from './api.js';
 import { D, S, save } from './store.js';
 import { closeSheet, openSheet, popPage, pushPage, refreshPage, setBusy, toast, topPage, type PageDef } from './ui.js';
 import { acts, amenCount, byId, chav, commentCount, cover, leaderPfp, logo, look, pic, songs, trackRow, bookProgress, videoSrc } from './views.js';
@@ -444,6 +444,7 @@ export const SHEETS: Record<string, (arg: string) => SafeHTML | null> = {
       ${m ? html`<span class="avatar-me">${m.name.slice(0, 1).toUpperCase()}</span><h3 style="margin-top:14px">${m.name}</h3><p class="sub" style="margin:0">Signed in on this device</p>`
           : html`<span class="me" style="width:76px;height:76px">${ic('user', 'lg')}</span><h3 style="margin-top:14px">You’re browsing as a guest</h3><p class="sub" style="margin:0">Sign in to comment, join the live chat and share your testimony.</p>`}</div>
     ${m ? '' : html`<div style="display:grid;gap:10px;margin:20px"><button class="btn fill" data-signin="profile">${ic('user', 'sm')}Sign in</button></div>`}
+    ${DEMO ? html`<p class="signin-note" style="margin:14px 20px 0;text-align:center">Demo build — content is built in and your activity stays on this phone. Nothing is sent to a server.</p>` : ''}
     <div style="margin-top:${m ? 16 : 0}px">
     <button class="opt" data-page="saved"><span class="oi">${ic('save')}</span><div><b>Saved</b><span>${savedN ? `${savedN} item${savedN > 1 ? 's' : ''}` : 'Posts, books and messages you keep'}</span></div></button>
     <button class="opt" data-theme-toggle role="switch" aria-checked="${isDark()}"><span class="oi">${ic('moon')}</span><div><b>Dark mode</b><span>Royal purple, easy on the eyes at night services</span></div><span class="switch ${isDark() ? 'on' : ''}"></span></button>

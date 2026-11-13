@@ -1,5 +1,18 @@
 const cap = () => window.Capacitor;
-const plugin = (name) => cap()?.Plugins?.[name];
+const registered = {};
+/** Native plugin proxy. Native builds load @capacitor/core (capacitor.js), whose registerPlugin wires calls to the native side. */
+const plugin = (name) => {
+    const c = cap();
+    if (!c)
+        return undefined;
+    if (c.Plugins?.[name])
+        return c.Plugins[name];
+    if (name in registered)
+        return registered[name];
+    registered[name] = c.isNativePlatform?.() && c.registerPlugin ? c.registerPlugin(name) : undefined;
+    return registered[name];
+};
+export const hasPlugin = (name) => !!plugin(name);
 export const isNative = () => !!cap()?.isNativePlatform?.();
 export const platform = () => cap()?.getPlatform?.() || 'web';
 /* ---------- storage: Preferences survives iOS WebView storage eviction ---------- */

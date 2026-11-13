@@ -50,7 +50,7 @@ export const save = {
     member: () => persist('pko.member', S.member),
     readerSize: () => persist('pko.readerSize', S.readerSize),
 };
-export const STORAGE_KEYS = ['pko.session', 'pko.member', 'pko.amen', 'pko.saved', 'pko.reminders', 'pko.reading', 'pko.readerSize', 'pko.theme', 'pko.onboarded', 'pko.bundle'];
+export const STORAGE_KEYS = ['pko.session', 'pko.demo', 'pko.member', 'pko.amen', 'pko.saved', 'pko.reminders', 'pko.reading', 'pko.readerSize', 'pko.theme', 'pko.onboarded', 'pko.bundle'];
 export function D() {
     if (!S.data)
         throw new Error('Content not loaded');
