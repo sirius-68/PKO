@@ -2,6 +2,7 @@ import { html, raw, ic, art, avi, fmt, mmss, ago, when, readMins, parseD, iso, t
 import { mediaUrl, type Album, type Book, type Broadcast, type EventItem, type Post, type Testimony, type Track } from './api.js';
 import { D, S } from './store.js';
 import { player } from './media.js';
+import { onNow, upNext, airLabel, SOURCES, type OnNow } from '../shared/channel.js';
 
 /* ---------- media helpers ---------- */
 export const pic = (id: string | null | undefined, pos: string | null = 'center', cls = '', alt = ''): SafeHTML =>
@@ -162,44 +163,77 @@ export function renderHome(): SafeHTML {
 export const renderFeed = (): SafeHTML => html`${feed().map(postCard)}`;
 
 /* ---------- TV ---------- */
-export function tvCurrent(): { live: boolean; title: string; sub: string; src: string; poster: string | null; id: string } | null {
+/**
+ * What the TV tab shows. mode: live = studio stream; channel = the 24/7 channel
+ * playing a past message on schedule/rotation; vod = a past message the member picked.
+ */
+export interface TvNow { mode: 'live' | 'channel' | 'vod'; live: boolean; title: string; sub: string; src: string; poster: string | null; id: string; offset: number; until: Date | null }
+export const channel = (): OnNow => onNow(D());
+export function tvCurrent(): TvNow | null {
   const d = D();
   if (S.tvNow === 'live') {
-    if (!d.live.onAir) return null;
-    return { live: true, title: d.live.title, sub: `${d.settings.leader}${d.live.ref ? `, ${d.live.ref}` : ''}`, src: videoSrc(d.live), poster: d.live.poster, id: 'live' };
+    const n = channel();
+    if (n.kind === 'live') return { mode: 'live', live: true, title: d.live.title, sub: `${d.settings.leader}${d.live.ref ? `, ${d.live.ref}` : ''}`, src: videoSrc(d.live), poster: d.live.poster, id: 'live', offset: 0, until: null };
+    const b = n.video && byId(d.broadcasts, n.video.id);
+    if (!b) return null;
+    const prog = n.kind === 'replay' && n.airing ? `${n.airing.slot.title} replay` : 'Latest messages on rotation';
+    return { mode: 'channel', live: false, title: b.title, sub: `${prog}${b.ref ? ` · ${b.ref}` : ''}`, src: videoSrc(b), poster: b.poster, id: b.id, offset: n.offset, until: n.until };
   }
   const b = byId(d.broadcasts, S.tvNow);
   if (!b) return null;
-  return { live: false, title: b.title, sub: `${b.ref ? b.ref + ', ' : ''}${when(b.publishedAt)}`, src: videoSrc(b), poster: b.poster, id: b.id };
+  return { mode: 'vod', live: false, title: b.title, sub: `${b.ref ? b.ref + ', ' : ''}${when(b.publishedAt)}`, src: videoSrc(b), poster: b.poster, id: b.id, offset: 0, until: null };
 }
+/** Tabs under the player. The chat stays open whenever the channel is playing. */
+export const tvPanes = (c: TvNow | null): string[][] =>
+  !c ? [['next', 'Up next'], ['past', 'Past messages']]
+    : c.mode === 'vod' ? [['past', 'Past messages'], ['next', 'Up next']]
+      : [['chat', c.live ? 'Live chat' : 'Chat'], ['next', 'Up next'], ['past', 'Past messages']];
 export function renderTV(): SafeHTML {
   const d = D();
   const c = tvCurrent();
+  const seg = html`<div class="seg" style="margin-top:18px">${tvPanes(c).map(([k, l]) => html`<button class="${S.tvPane === k ? 'on' : ''}" data-tvpane="${k}">${l}</button>`)}</div><div id="tvpane"></div>`;
   if (!c) {
-    if (S.tvPane === 'chat') S.tvPane = 'past';
-    const next = d.schedule[0];
-    return html`<div class="offair">${pic(d.live.poster || d.broadcasts[0]?.poster, 'center 30%')}<div class="ov"><span class="pill-off">OFF AIR</span><b>${d.settings.tvName} is off air right now</b><span>${next ? `Next: ${next.title} at ${next.time}. ` : ''}Watch a past message below.</span></div></div>
-    <div class="seg" style="margin-top:18px">${[['next', 'Schedule'], ['past', 'Past messages']].map(([k, l]) => html`<button class="${S.tvPane === k ? 'on' : ''}" data-tvpane="${k}">${l}</button>`)}</div>
-    <div id="tvpane"></div>`;
+    if (S.tvPane === 'chat') S.tvPane = 'next';
+    const next = upNext(d, new Date(), 1)[0];
+    return html`<div class="offair">${pic(d.live.poster || d.broadcasts[0]?.poster, 'center 30%')}<div class="ov"><span class="pill-off">OFF AIR</span><b>${d.settings.tvName} is off air right now</b><span>${next ? `Next: ${next.slot.title} at ${airLabel(next.start)}. ` : ''}Watch a past message below.</span></div></div>
+    ${seg}`;
   }
+  if (c.mode === 'vod' && S.tvPane === 'chat') S.tvPane = 'past';
+  const tvBack = c.mode === 'vod' && (d.live.onAir || d.live.channel24);
   return html`
-  <div class="player" id="player" data-player>
+  <div class="player" id="player" data-player data-mode="${c.mode}">
     <video id="tvv" playsinline webkit-playsinline preload="metadata" ${c.poster ? raw(`poster="${mediaUrl(c.poster)}"`) : ''}></video>
     <button class="unmute" id="unmute" data-mute hidden>${ic('vol', 'xs')}Tap for sound</button>
     <div class="pov">
-      <div class="ptop">${c.live ? html`<span class="live-pill"><i></i>LIVE</span><span class="eye">${ic('eye', 'xs')}<span data-viewers>–</span></span>` : html`<span class="eye">Replay</span>`}
+      <div class="ptop">${c.live ? html`<span class="live-pill"><i></i>LIVE</span><span class="eye">${ic('eye', 'xs')}<span data-viewers>–</span></span>`
+        : c.mode === 'channel' ? html`<span class="ch-pill">ON TV</span><span class="eye">${ic('eye', 'xs')}<span data-viewers>–</span></span>` : html`<span class="eye">Replay</span>`}
       <span style="margin-left:auto;display:flex;align-items:center;gap:6px;opacity:.95">${logo(18)}${d.settings.tvName}</span></div>
       <button class="ctr" data-tvplay aria-label="Play or pause">${ic('play', 'lg')}</button>
-      <div class="pbot"><span id="tvt">${c.live ? 'LIVE' : '0:00'}</span><span class="bar ${c.live ? '' : 'vod'}" ${c.live ? '' : raw('data-seek role="slider" aria-label="Seek"')}><s><i id="tvbar" style="width:${c.live ? '100%' : '0%'}"></i></s></span><span id="tvdur"></span>
+      <div class="pbot"><span id="tvt">${c.live ? 'LIVE' : '0:00'}</span><span class="bar ${c.live ? '' : 'vod'}" ${c.mode === 'vod' ? raw('data-seek role="slider" aria-label="Seek"') : ''}><s><i id="tvbar" style="width:${c.live ? '100%' : '0%'}"></i></s></span><span id="tvdur"></span>
         <button data-mute aria-label="Sound" id="tvmute">${ic('vol', 'sm')}</button><button data-fs aria-label="Full screen">${ic('full', 'sm')}</button></div>
     </div>
   </div>
-  <div class="tvinfo"><div class="brand">${chav('tv')}<span>${d.settings.tvName}</span>${!c.live && d.live.onAir ? html`<button class="chip" style="margin-left:auto;height:30px" data-golive><span class="live-pill" style="height:16px;padding:0 5px;font-size:9.5px"><i></i>LIVE</span>Back to live</button>` : ''}</div>
+  <div class="tvinfo"><div class="brand">${chav('tv')}<span>${d.settings.tvName}</span>${tvBack ? html`<button class="chip" style="margin-left:auto;height:30px" data-golive>${d.live.onAir ? html`<span class="live-pill" style="height:16px;padding:0 5px;font-size:9.5px"><i></i>LIVE</span>Back to live` : html`${ic('tv', 'xs')}Back to TV`}</button>` : ''}</div>
     <h1>${c.title}</h1><p>${c.sub}</p>
     <div class="acts">${amenBtn(c.live ? 'live' : c.id)}<button class="apill" data-share="${c.id}">${ic('share', 'sm')}Share</button>${c.live ? '' : html`<button class="apill ${S.saved[c.id] ? 'on' : ''}" data-save="${c.id}" data-kind="broadcast">${ic('save', 'sm')}Save</button>`}</div>
   </div>
-  <div class="seg" style="margin-top:18px">${(c.live ? [['chat', 'Live chat'], ['next', 'Up next'], ['past', 'Past messages']] : [['past', 'Past messages'], ['next', 'Schedule']]).map(([k, l]) => html`<button class="${S.tvPane === k ? 'on' : ''}" data-tvpane="${k}">${l}</button>`)}</div>
-  <div id="tvpane"></div>`;
+  ${seg}`;
+}
+/** "Up next": what's on now, then the next programmes (each once), in the viewer's time. */
+export function renderUpNext(): SafeHTML {
+  const d = D();
+  const now = new Date();
+  const n = channel();
+  const seen = new Set<string>();
+  const next = upNext(d, now, 40).filter((a) => !seen.has(a.slot.id) && seen.add(a.slot.id)).slice(0, 8);
+  const tag = (src: string | null | undefined) => src === SOURCES.replay ? html`<span class="tag">Replay</span>` : src === SOURCES.rotation ? html`<span class="tag">Rotation</span>` : html`<span class="tag live">Live</span>`;
+  const nowRow = n.kind === 'live'
+    ? html`<div class="sched"><span class="tm now">Now</span><div class="tx"><b>${d.live.title}</b><span>Live with ${d.settings.leader}</span></div><span class="live-pill"><i></i>LIVE</span></div>`
+    : n.video ? html`<div class="sched"><span class="tm now">Now</span><div class="tx"><b>${n.kind === 'replay' && n.airing ? n.airing.slot.title : n.video.title}</b><span>${n.kind === 'replay' ? `Replay: ${n.video.title}` : 'Latest messages on rotation'}</span></div><span class="ch-pill">ON TV</span></div>`
+      : '';
+  if (!next.length && !nowRow) return html`<div class="empty">The schedule will be posted soon.</div>`;
+  return html`<div style="padding-top:6px">${nowRow}
+    ${next.map((a) => { const k = 's:' + a.slot.id, on = !!S.reminders[k]; const lb = airLabel(a.start, now).split(' '); return html`<div class="sched"><span class="tm">${lb.length > 1 ? html`<small>${lb[0]}</small>` : ''}${lb[lb.length - 1]}</span><div class="tx"><b>${a.slot.title}${tag(a.slot.source)}</b><span>${a.slot.subtitle || ''}</span></div><button class="remind ${on ? 'on' : ''}" data-remind="${k}" aria-pressed="${on}">${ic(on ? 'check' : 'bell', 'xs')}${on ? 'Reminder set' : 'Remind me'}</button></div>`; })}</div>`;
 }
 
 /* ---------- LIBRARY ---------- */

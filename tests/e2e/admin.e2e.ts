@@ -184,7 +184,7 @@ describe('creator dashboard', () => {
     await clearToast(page);
     await page.click('dialog.dlg button[value=ok]');
     await toast(page, /ended/);
-    await app.page.waitForSelector('.offair');
+    await app.page.waitForSelector('.player .ch-pill'); // 24/7: replays carry on
     await page.waitForSelector('[data-onair="1"]');
     await clearToast(page);
     await page.click('[data-onair="1"]');

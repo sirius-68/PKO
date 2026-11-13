@@ -5,7 +5,7 @@ import * as demo from './demo.js';
 /* ---------- content types (mirror src/shared/schema.ts) ---------- */
 interface Base { id: string; publishedAt: string }
 export interface Post extends Base { title: string; flair: string; verse: string | null; ref: string | null; body: string[]; image: string | null; imagePos: string | null }
-export interface Broadcast extends Base { title: string; ref: string | null; category: string; video: string | null; url: string | null; poster: string }
+export interface Broadcast extends Base { title: string; ref: string | null; category: string; video: string | null; url: string | null; poster: string; duration?: number | null }
 export interface Chapter { id: string; title: string; words: number }
 export interface Book extends Base { title: string; description: string; year: number | null; pages: number | null; image: string; imagePos: string | null; pdf: string | null; chapters: Chapter[] }
 export interface Track { id: string; title: string; audio: string | null; duration: number | null }
@@ -13,9 +13,13 @@ export interface Album extends Base { title: string; artist: string; year: numbe
 export interface EventItem extends Base { title: string; date: string; time: string; place: string; description: string; image: string | null; imagePos: string | null }
 export interface Testimony extends Base { title: string; name: string; place: string | null; quote: string | null; body: string[]; video: string | null }
 export interface Photo extends Base { image: string; caption: string; album: string }
-export interface Slot extends Base { time: string; title: string; subtitle: string | null }
+export interface Slot extends Base { time: string; end?: string | null; days?: string | null; title: string; subtitle: string | null; source?: string | null; broadcast?: string | null }
 export interface Settings { appName: string; ministry: string; tvName: string; recordsName: string; leader: string; aboutText: string; aboutVerse: string; aboutVerseRef: string; logo: string | null; leaderPhoto: string | null }
-export interface Live { onAir: boolean; title: string; ref: string | null; video: string | null; url: string | null; poster: string | null }
+export interface Live {
+  onAir: boolean; title: string; ref: string | null; video: string | null; url: string | null; poster: string | null;
+  /** 24/7 channel: schedule time zone, keep playing between live programmes. */
+  timezone?: string | null; channel24?: boolean; status?: string | null; programme?: string | null;
+}
 export interface Bundle {
   version: number; settings: Settings; live: Live;
   posts: Post[]; broadcasts: Broadcast[]; books: Book[]; albums: Album[]; events: EventItem[]; testimonies: Testimony[]; photos: Photo[]; schedule: Slot[];

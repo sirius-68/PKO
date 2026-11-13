@@ -181,7 +181,9 @@ language sql stable security definer set search_path = public as $$
 $$;
 create or replace function public._live() returns jsonb
 language sql stable security definer set search_path = public as $$
-  select jsonb_build_object('onAir', false, 'title', 'Live service', 'ref', '', 'video', null, 'url', '', 'poster', null)
+  select jsonb_build_object('onAir', false, 'title', 'Live service', 'ref', '', 'video', null, 'url', '', 'poster', null,
+    'timezone', 'Africa/Douala', 'channel24', true, 'autoOnAir', true, 'autoArchive', true, 'archiveCategory', 'Services',
+    'status', null, 'statusAt', null, 'programme', null)
   || coalesce((select value from public.settings where key = 'live'), '{}'::jsonb);
 $$;
 
@@ -224,11 +226,25 @@ begin
   end loop;
   foreach f in array public._media_fields(coll) loop
     v := d -> f;
+    -- Broadcast thumbnails may be a link (recordings from the streaming service).
+    if coll = 'broadcasts' and f = 'poster' and v #>> '{}' ~ '^https://\S+$' then continue; end if;
     if v is not null and jsonb_typeof(v) = 'string' and v #>> '{}' <> '' and not exists (select 1 from public.media where id = v #>> '{}') then
       errs := errs || jsonb_build_object(f, 'File was not found — upload it again');
     end if;
   end loop;
   if d ? 'body' and d -> 'body' <> 'null'::jsonb and jsonb_typeof(d -> 'body') <> 'array' then errs := errs || '{"body":"Body must be a list of paragraphs"}'; end if;
+  if coll = 'schedule' then
+    if (d ->> 'time') !~ '^([01]\d|2[0-3]):[0-5]\d$' then errs := errs || '{"time":"Use a 24-hour time like 18:30"}'; end if;
+    if coalesce(d ->> 'end', '') <> '' and (d ->> 'end') !~ '^([01]\d|2[0-3]):[0-5]\d$' then errs := errs || '{"end":"Use a 24-hour time like 20:00"}'; end if;
+    if coalesce(d ->> 'days', 'Every day') <> all (array['Every day','Weekdays','Weekends','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays','Sundays']) then errs := errs || '{"days":"Choose which days it airs"}'; end if;
+    if coalesce(d ->> 'source', 'Live from the studio') <> all (array['Live from the studio','A past message','Latest messages on rotation']) then errs := errs || '{"source":"Choose what plays"}'; end if;
+    if d ->> 'source' = 'A past message' and not exists (select 1 from public.items b where b.collection = 'broadcasts' and b.id = d ->> 'broadcast') then
+      errs := errs || '{"broadcast":"Choose the past message to play"}';
+    end if;
+  end if;
+  if coll = 'broadcasts' and coalesce(d ->> 'duration', '') <> '' and (jsonb_typeof(d -> 'duration') <> 'number' or (d ->> 'duration')::numeric <= 0) then
+    errs := errs || '{"duration":"Length must be a number of seconds"}';
+  end if;
   if coll = 'events' and d ? 'date' and (d ->> 'date') !~ '^\d{4}-\d{2}-\d{2}$' then errs := errs || '{"date":"Date must be YYYY-MM-DD"}'; end if;
   if coll = 'albums' and jsonb_typeof(d -> 'tracks') = 'array' then
     for i in 0 .. jsonb_array_length(d -> 'tracks') - 1 loop
@@ -620,6 +636,8 @@ begin
   if coalesce(merged ->> 'poster', '') = '' then errs := errs || '{"poster":"Poster image is required"}'; end if;
   if (merged ->> 'onAir')::boolean and coalesce(merged ->> 'video', '') = '' and coalesce(merged ->> 'url', '') = '' then errs := errs || '{"video":"Add a stream file or URL before going live"}'; end if;
   if coalesce(merged ->> 'url', '') <> '' and merged ->> 'url' !~ '^https://' then errs := errs || '{"url":"Use an https:// link"}'; end if;
+  if not exists (select 1 from pg_timezone_names where name = merged ->> 'timezone') then errs := errs || '{"timezone":"Use a time zone name like Africa/Douala"}'; end if;
+  if coalesce(trim(merged ->> 'archiveCategory'), '') = '' then errs := errs || '{"archiveCategory":"Category is required"}'; end if;
   if errs <> '{}'::jsonb then perform public._fail('Please fix the highlighted fields', errs); end if;
   insert into public.settings (key, value) values ('live', merged) on conflict (key) do update set value = excluded.value, updated_at = now();
   return merged;
@@ -731,11 +749,81 @@ begin
   return '{"ok":true}';
 end $$;
 
+-- ---------------------------------------------------------------- 24/7 channel: stream events
+-- vMix streams to a streaming service (Cloudflare Stream, Mux, ...). The service calls the
+-- stream-webhook Edge Function, which verifies the call and forwards a normalised event here
+-- using the service role. Members and the media team cannot call this.
+
+/** The schedule slot the studio is most likely going live for (channel time zone). */
+create or replace function public._current_slot() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare tz text := coalesce(public._live() ->> 'timezone', 'UTC'); loc timestamp; dow integer; t time; r jsonb;
+begin
+  if not exists (select 1 from pg_timezone_names where name = tz) then tz := 'UTC'; end if;
+  loc := now() at time zone tz; dow := extract(isodow from loc); t := loc::time;
+  select i.data into r from public.items i
+  where i.collection = 'schedule' and i.status = 'published' and (i.data ->> 'time') ~ '^\d{2}:\d{2}$'
+    and case coalesce(i.data ->> 'days', 'Every day')
+          when 'Every day' then true when 'Weekdays' then dow <= 5 when 'Weekends' then dow >= 6
+          else array_position(array['Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays','Sundays'], i.data ->> 'days') = dow end
+    -- the studio may start a little early or a while late
+    and abs(extract(epoch from (t - (i.data ->> 'time')::time))) <= 3 * 3600
+    and t >= (i.data ->> 'time')::time - interval '20 minutes'
+  order by (coalesce(i.data ->> 'source', 'Live from the studio') = 'Live from the studio') desc,
+           abs(extract(epoch from (t - (i.data ->> 'time')::time))) asc
+  limit 1;
+  return r;
+end $$;
+
+create or replace function public.stream_ingest(p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare lv jsonb := public._live(); ev text := p ->> 'type'; slot jsonb; existing text; ttl text; started timestamptz; i public.items;
+begin
+  if coalesce(auth.role(), '') <> 'service_role' then perform public._fail('Not allowed', null, '42501'); end if;
+  if ev = 'live.started' then
+    slot := public._current_slot();
+    lv := lv || jsonb_build_object('status', 'live', 'statusAt', now(), 'programme', coalesce(slot ->> 'title', lv ->> 'title'));
+    if coalesce((lv ->> 'autoOnAir')::boolean, true) and (coalesce(lv ->> 'url', '') <> '' or coalesce(lv ->> 'video', '') <> '') then
+      lv := lv || '{"onAir": true}';
+      if slot is not null then lv := lv || jsonb_build_object('title', slot ->> 'title', 'ref', coalesce(slot ->> 'subtitle', '')); end if;
+    end if;
+  elsif ev = 'live.ended' then
+    lv := lv || jsonb_build_object('status', 'idle', 'statusAt', now());
+    if coalesce((lv ->> 'autoOnAir')::boolean, true) then lv := lv || '{"onAir": false}'; end if;
+  elsif ev = 'recording.ready' then
+    if coalesce(p ->> 'url', '') !~ '^https://\S+$' then perform public._fail('Recording needs an https url'); end if;
+    if coalesce(p ->> 'id', '') = '' then perform public._fail('Recording needs an id'); end if;
+    select id into existing from public.items where collection = 'broadcasts' and data ->> 'sourceId' = p ->> 'id';
+    if existing is not null then return jsonb_build_object('ok', true, 'archived', false, 'id', existing); end if;
+    if not coalesce((lv ->> 'autoArchive')::boolean, true) then return '{"ok":true,"archived":false}'; end if;
+    started := coalesce(nullif(p ->> 'startedAt', '')::timestamptz, now());
+    ttl := coalesce(nullif(trim(p ->> 'title'), ''), nullif(lv ->> 'programme', ''), nullif(lv ->> 'title', ''), 'Live service');
+    insert into public.items (id, collection, status, data, published_at) values (
+      public._new_id('br'), 'broadcasts', 'published', jsonb_build_object(
+        'title', left(ttl, 140),
+        'ref', 'Recorded live ' || to_char(started at time zone coalesce(nullif(lv ->> 'timezone', ''), 'UTC'), 'FMDD Mon YYYY'),
+        'category', coalesce(nullif(lv ->> 'archiveCategory', ''), 'Services'),
+        'video', null, 'url', p ->> 'url',
+        'poster', coalesce(nullif(p ->> 'poster', ''), lv ->> 'poster'),
+        'duration', case when (p ->> 'duration') ~ '^\d+(\.\d+)?$' and (p ->> 'duration')::numeric > 0 then round((p ->> 'duration')::numeric) end,
+        'sourceId', p ->> 'id'),
+      started) returning * into i;
+    return jsonb_build_object('ok', true, 'archived', true, 'id', i.id);
+  else
+    perform public._fail('Unknown stream event');
+  end if;
+  insert into public.settings (key, value) values ('live', lv) on conflict (key) do update set value = excluded.value, updated_at = now();
+  return jsonb_build_object('ok', true, 'live', lv);
+end $$;
+revoke execute on function public.stream_ingest(jsonb) from public, anon, authenticated;
+grant execute on function public.stream_ingest(jsonb) to service_role;
+
 -- ---------------------------------------------------------------- privileges
 -- Internal helpers are not callable from the API.
 revoke execute on function public._require_admin(), public._fail(text, jsonb, text), public._rate_limit(text, integer, interval),
   public._new_id(text), public._member(), public._item_json(public.items, boolean), public._settings(), public._live(),
-  public._required_fields(text), public._media_fields(text), public._validate_item(text, jsonb), public._with_row_ids(jsonb)
+  public._required_fields(text), public._media_fields(text), public._validate_item(text, jsonb), public._with_row_ids(jsonb),
+  public._current_slot()
   from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- storage

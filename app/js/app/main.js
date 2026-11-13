@@ -3,7 +3,8 @@ import { ApiError, cachedBundle, fetchBundle, shareUrl, mediaUrl, myAmens, toggl
 import { D, S, hydrate, save, STORAGE_KEYS } from './store.js';
 import { getItem, hideSplash, loadStorage, onAppUrlOpen, onResume, scheduleReminder, cancelReminder, setItem, setStatusBar, share, tap, isNative } from './native.js';
 import { closeAllPages, closeDrawer, closeLightbox, closeSheet, currentSheet, enableEdgeSwipe, focusTrapKeys, handleBack, initBack, openDrawer, openSheet, pageDepth, popPage, toast, topPage } from './ui.js';
-import { CH, chav, logo, pic, renderChannel, renderEvents, renderFeed, renderHome, renderLibrary, renderTV, songs, trackRow, tvCurrent, byId, amenCount, evRow } from './views.js';
+import { CH, chav, logo, pic, renderChannel, renderEvents, renderFeed, renderHome, renderLibrary, renderTV, renderUpNext, songs, trackRow, tvCurrent, tvPanes, byId, amenCount, evRow } from './views.js';
+import { nextAiring } from '../shared/channel.js';
 import { armIdle, chatPane, leaveTV, miniPlayer, mountTV, onLiveChange, onPlayerChange, pauseTV, playSong, renderChat, seekMusic, skip, startChat, stopChat, togglePlay, tvFullscreen, tvMute, tvSeek, tvToggle, player } from './media.js';
 import { PAGES, SHEETS, pageHooks, bumpFont, cancelReply, deleteComment, doSearch, goChapter, addToCalendar, isDark, loadComments, openPage, openPdf, openSignIn, pickVideo, rerenderTop, setWriteTab, signOut, signedInHooks, startReply, submitComment, submitSignIn, submitTestimony } from './pages.js';
 /* =========================================================
@@ -143,7 +144,7 @@ function enterApp(signin = false) {
         focusTrapKeys();
         initPullToRefresh();
         setInterval(() => refresh(false), 5 * 60_000);
-        onResume(() => refresh(false));
+        onResume(() => { refresh(false); retune(); });
         window.addEventListener('online', () => { $('#netbar')?.remove(); refresh(false); });
         window.addEventListener('offline', showOffline);
     }
@@ -174,7 +175,7 @@ function renderTopbar() {
         title = html `${logo(34)}<span class="nm">${d.settings.appName}<small>${d.settings.ministry}</small></span>`;
     else if (S.tab === 'tv') {
         const c = tvCurrent();
-        title = html `${chav('tv')}<span class="nm">${d.settings.tvName}${c?.live ? html `<small style="color:var(--live)">Live now</small>` : c ? html `<small>Replay</small>` : html `<small>Off air</small>`}</span>`;
+        title = html `${chav('tv')}<span class="nm">${d.settings.tvName}${c?.live ? html `<small style="color:var(--live)">Live now</small>` : c?.mode === 'channel' ? html `<small>On TV now</small>` : c ? html `<small>Replay</small>` : html `<small>Off air</small>`}</span>`;
     }
     else if (S.tab === 'library')
         title = html `${chav('library')}<span class="nm">Library</span>`;
@@ -230,11 +231,28 @@ function go(tab, chan = null, opts = {}) {
         renderTvPane();
         const c = tvCurrent();
         if (c)
-            mountTV(c.src, c.live);
+            mountTV(c.src, c.mode, { offset: c.offset, onEnded: retune });
+        // The channel moves on by itself: when this programme ends, tune to what's next.
+        clearTimeout(retuneTimer);
+        if (c?.until)
+            retuneTimer = window.setTimeout(retune, Math.max(1000, c.until.getTime() - Date.now() + 500));
         // Stay subscribed on the TV tab even when off air or watching a replay,
         // so "we're live" / "service ended" arrives instantly.
         startChat();
     }
+}
+let retuneTimer;
+/** Re-tune the 24/7 channel (only while someone is watching it). */
+function retune() {
+    clearTimeout(retuneTimer);
+    if (!(S.tab === 'tv' && !S.chan && S.tvNow === 'live'))
+        return;
+    // Don't pull a page or sheet out from under the member; try again shortly.
+    if (document.querySelector('#pages .page, #sheet.on, #drawer.on')) {
+        retuneTimer = window.setTimeout(retune, 15000);
+        return;
+    }
+    go('tv', null, { keepScroll: true });
 }
 const rerenderView = () => { const m = must('#main'); const st = m.scrollTop; const v = S.chan ? renderChannel(S.chan) : ({ home: renderHome, tv: renderTV, library: renderLibrary, events: renderEvents })[S.tab](); setHTML(m.firstElementChild, v); m.scrollTop = st; };
 function renderTvPane() {
@@ -242,15 +260,17 @@ function renderTvPane() {
     if (!el)
         return;
     const d = D();
-    if (S.tvPane === 'chat' && tvCurrent()?.live) {
+    const panes = tvPanes(tvCurrent()).map((p) => p[0]);
+    if (!panes.includes(S.tvPane))
+        S.tvPane = panes[0];
+    $$('[data-tvpane]').forEach((b) => b.classList.toggle('on', b.dataset.tvpane === S.tvPane));
+    if (S.tvPane === 'chat') {
         setHTML(el, chatPane());
         renderChat();
         return;
     }
     if (S.tvPane === 'next') {
-        setHTML(el, d.schedule.length ? html `<div style="padding-top:6px">${d.live.onAir ? html `<div class="sched"><span class="tm now">Now</span><div class="tx"><b>${d.live.title}</b><span>Live with ${d.settings.leader}</span></div><span class="live-pill"><i></i>LIVE</span></div>` : ''}
-      ${d.schedule.map((s) => { const k = 's:' + s.id, on = !!S.reminders[k]; return html `<div class="sched"><span class="tm">${s.time}</span><div class="tx"><b>${s.title}</b><span>${s.subtitle || ''}</span></div><button class="remind ${on ? 'on' : ''}" data-remind="${k}" aria-pressed="${on}">${ic(on ? 'check' : 'bell', 'xs')}${on ? 'Reminder set' : 'Remind me'}</button></div>`; })}</div>`
-            : html `<div class="empty">The schedule will be posted soon.</div>`);
+        setHTML(el, renderUpNext());
         return;
     }
     S.tvPane = 'past';
@@ -310,14 +330,18 @@ async function syncAmens() {
 onLiveChange((l) => {
     if (!S.data)
         return;
-    const was = S.data.live.onAir;
+    const prev = S.data.live;
     S.data.live = l;
     renderTabbar();
     renderDrawer();
-    if (S.tab === 'tv' && !S.chan && S.tvNow === 'live' && was !== l.onAir) {
-        toast(l.onAir ? `${S.data.settings.tvName} is live now` : 'The live service has ended');
+    const watching = S.tab === 'tv' && !S.chan && S.tvNow === 'live';
+    if (watching && prev.onAir !== l.onAir) {
+        toast(l.onAir ? `${S.data.settings.tvName} is live now` : l.channel24 ? 'The live service has ended. Replays continue.' : 'The live service has ended');
         go('tv');
     }
+    // The media team changed how the channel runs, or the stream link: re-tune.
+    else if (watching && (prev.channel24 !== l.channel24 || prev.timezone !== l.timezone || (l.onAir && (prev.url !== l.url || prev.video !== l.video))))
+        go('tv', null, { keepScroll: true });
     else if (S.tab === 'home' && !S.chan)
         rerenderView();
 });
@@ -507,16 +531,11 @@ onAppUrlOpen((url) => { const i = url.indexOf('#'); if (i >= 0)
 function reminderTime(key) {
     const d = D();
     if (key.startsWith('s:')) {
-        const s = byId(d.schedule, key.slice(2));
-        if (!s)
+        const a = nextAiring(d, key.slice(2));
+        if (!a)
             return null;
-        const [h, mi] = s.time.split(':').map(Number);
-        const at = new Date();
-        at.setHours(h || 0, mi || 0, 0, 0);
-        if (at.getTime() < Date.now())
-            at.setDate(at.getDate() + 1);
-        at.setMinutes(at.getMinutes() - 10);
-        return { at, title: `${s.title} starts in 10 minutes`, body: `Watch on ${d.settings.tvName}` };
+        const at = new Date(a.start.getTime() - 10 * 60e3);
+        return { at, title: `${a.slot.title} starts in 10 minutes`, body: `Watch on ${d.settings.tvName}` };
     }
     const e = byId(d.events, key);
     if (!e)

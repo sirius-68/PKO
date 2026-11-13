@@ -298,7 +298,12 @@ body{display:block;background-color:#1A0B2C}
 .inp{flex:1;height:46px;border-radius:999px;border:1px solid var(--line);background:var(--surface);padding:0 18px;outline:none;font-size:14.5px}
 .inp:focus{border-color:var(--gold)}
 .sched{display:flex;gap:14px;align-items:center;padding:12px 16px}
-.sched .tm{width:58px;font-size:13px;font-weight:700;color:var(--muted)}
+.sched .tm{width:64px;flex:none;font-size:13px;font-weight:700;color:var(--muted);line-height:1.25}
+.sched .tm small{display:block;font-size:11px;font-weight:600}
+.sched .tx b .tag{display:inline-block;margin-left:8px;vertical-align:2px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:5px;background:rgba(127,127,127,.16);color:var(--muted)}
+.sched .tx b .tag.live{background:rgba(220,38,38,.12);color:var(--live)}
+.ch-pill{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:7px;background:rgba(255,255,255,.22);color:#fff;font-size:11.5px;font-weight:800;letter-spacing:.04em;flex:none}
+.sched .ch-pill{background:var(--fill);color:var(--on-fill)}
 .sched .tm.now{color:var(--live)}
 .sched .tx{flex:1}
 .sched .tx b{display:block;font-size:15px;font-weight:600}

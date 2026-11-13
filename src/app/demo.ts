@@ -4,6 +4,7 @@
  * does — signing in with a name, Amens, comments, chat, testimonies — stays on
  * the device. Used for preview APKs before Supabase is connected.
  */
+import { airings, SOURCES } from '../shared/channel.js';
 import { getItem, setItem } from './native.js';
 import type { Bundle, ChatMsg, Comment, Member } from './api.js';
 
@@ -39,6 +40,8 @@ export async function demoBundle(): Promise<Bundle> {
     if (it.collection === 'albums') d.tracks = ((it.data.tracks as Record<string, unknown>[]) || []).map((t, j) => ({ audio: null, duration: null, ...t, id: `tr${j}` }));
     by[it.collection]?.push(d);
   });
+  // Schedule slots name their past message by title ("@Christ the Rock").
+  for (const s of by.schedule) if (typeof s.broadcast === 'string' && s.broadcast.startsWith('@')) s.broadcast = by.broadcasts.find((b) => b.title === (s.broadcast as string).slice(1))?.id || null;
   const desc = (a: Record<string, unknown>, b: Record<string, unknown>) => String(b.publishedAt).localeCompare(String(a.publishedAt));
   for (const k of ['posts', 'broadcasts', 'albums', 'testimonies', 'photos']) by[k].sort(desc);
   by.events.sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -47,8 +50,14 @@ export async function demoBundle(): Promise<Bundle> {
   for (const [t, on] of Object.entries(l.amens)) if (on) amens[t] = 1;
   const comments: Record<string, number> = {};
   for (const [t, list] of Object.entries(l.comments)) comments[t] = list.length;
+  // The demo studio is "on air" during the schedule's live programmes, like the real channel
+  // when vMix is streaming; the rest of the time the 24/7 channel plays replays.
+  const live = { ...(seed.live as unknown as Bundle['live']) };
+  const at = new Date();
+  live.onAir = airings({ live, schedule: by.schedule as never, broadcasts: by.broadcasts as never }, at, new Date(at.getTime() + 1))
+    .some((a) => (a.slot.source || SOURCES.live) === SOURCES.live && a.start <= at && at < a.end);
   return {
-    version: 1, settings: seed.settings as unknown as Bundle['settings'], live: seed.live as unknown as Bundle['live'],
+    version: live.onAir ? 2 : 1, settings: seed.settings as unknown as Bundle['settings'], live,
     ...(by as unknown as Pick<Bundle, 'posts' | 'broadcasts' | 'books' | 'albums' | 'events' | 'testimonies' | 'photos' | 'schedule'>),
     amens, comments,
   };

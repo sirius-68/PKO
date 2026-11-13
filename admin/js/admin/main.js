@@ -3,6 +3,7 @@ import { SchemaForm, thumb } from './form.js';
 import { APP_URL, claimOwner, createAccount, supa } from './backend.js';
 import { importStarterContent } from './seed.js';
 import { validate } from '../shared/schema.js';
+import { onNow, upNext, airLabel, SOURCES } from '../shared/channel.js';
 let me = null;
 let schema;
 let currentForm = null;
@@ -170,7 +171,9 @@ async function overview() {
 async function listPage(key) {
     const c = coll(key);
     title(c.label);
-    setHTML($('#actions'), html `<a class="btn primary" href="#/c/${key}/new">${ic('plus')}New ${c.singular.toLowerCase()}</a>`);
+    setHTML($('#actions'), html `${key === 'schedule' ? html `<button class="btn" data-import>${ic('upload')}Import</button>` : ''}<a class="btn primary" href="#/c/${key}/new">${ic('plus')}New ${c.singular.toLowerCase()}</a>`);
+    $('[data-import]')?.addEventListener('click', () => importSchedule().then((n) => { if (n)
+        route(); }));
     const okList = alive();
     const { items } = await api(`/api/admin/items/${key}`);
     if (!okList())
@@ -253,7 +256,8 @@ function itemRow(c, it, manual, i, n) {
     const img = c.imageField ? it[c.imageField] : null;
     const scheduled = it.status === 'published' && Date.parse(it.publishedAt) > Date.now();
     const sub = [
-        c.key === 'events' ? String(it.date) : c.key === 'schedule' ? String(it.time) : rel(it.publishedAt),
+        c.key === 'events' ? String(it.date) : c.key === 'schedule' ? `${it.days || 'Every day'} ${it.time}${it.end ? `–${it.end}` : ''}` : rel(it.publishedAt),
+        c.key === 'schedule' ? (it.source === SOURCES.replay ? 'Replay' : it.source === SOURCES.rotation ? 'Rotation' : 'Live') : '',
         c.key === 'photos' ? String(it.album) : c.key === 'posts' ? String(it.flair) : c.key === 'broadcasts' ? String(it.category) : c.key === 'testimonies' ? `${it.name}${it.place ? ', ' + it.place : ''}` : c.key === 'albums' ? `${it.tracks.length} tracks` : c.key === 'books' ? `${it.chapters.length} chapters` : '',
     ].filter(Boolean).join(' · ');
     return html `<div class="irow">
@@ -292,7 +296,10 @@ async function editor(key, id) {
       ${item ? html `<button class="btn ghost danger block" type="button" data-del>${ic('trash')}Delete</button>` : ''}
     </aside></form>
     <datalist id="pos-presets"><option value="center"><option value="center 20%"><option value="center 30%"><option value="center 40%"><option value="top"><option value="bottom"><option value="left center"><option value="right center"></datalist>`);
-    const form = new SchemaForm($('[data-form]'), c.fields, item || {});
+    const fields = await withOptions(c.fields);
+    if (!okEd())
+        return;
+    const form = new SchemaForm($('[data-form]'), fields, item || {});
     currentForm = form;
     await form.loadMediaMeta();
     form.render();
@@ -310,6 +317,17 @@ async function editor(key, id) {
             form.showErrors(missing)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
             toast('Please fill in the required fields', 'err');
             return;
+        }
+        if (key === 'schedule' && form.state.source === SOURCES.replay && !form.state.broadcast) {
+            form.showErrors({ broadcast: 'Choose the past message to play' });
+            toast('Choose the past message to play', 'err');
+            return;
+        }
+        // The 24/7 channel needs each message's length; read it from the video itself.
+        if (key === 'broadcasts' && !form.state.duration && (form.state.video || form.state.url)) {
+            const d = await videoLength(form.state.video ? mediaUrl(String(form.state.video)) : String(form.state.url));
+            if (d)
+                form.state.duration = d;
         }
         const v = validate(c.fields, form.state);
         if (!v.ok) {
@@ -358,21 +376,142 @@ async function editor(key, id) {
         }
     });
 }
+/** Fill "pick an item" selects (e.g. the past message a schedule slot plays). */
+async function withOptions(fields) {
+    return Promise.all(fields.map(async (f) => {
+        if (!f.optionsFrom)
+            return f;
+        const { items } = await api(`/api/admin/items/${f.optionsFrom}`);
+        const labels = Object.fromEntries(items.filter((i) => i.status === 'published').map((i) => [i.id, String(i.title ?? i.caption ?? i.id)]));
+        return { ...f, options: Object.keys(labels), optionLabels: labels };
+    }));
+}
+/** Length of a video in whole seconds, or null if the browser can't tell. */
+function videoLength(src) {
+    return new Promise((resolve) => {
+        const v = document.createElement('video');
+        const done = (n) => { clearTimeout(t); v.removeAttribute('src'); v.load(); resolve(n); };
+        const t = setTimeout(() => done(null), 10000);
+        v.preload = 'metadata';
+        v.muted = true;
+        v.onloadedmetadata = () => done(Number.isFinite(v.duration) && v.duration > 0 ? Math.round(v.duration) : null);
+        v.onerror = () => done(null);
+        v.src = src;
+    });
+}
+/**
+ * Paste the programme plan (e.g. exported from the vMix running order or a spreadsheet):
+ * one programme per line — Days, Starts, Ends, Programme, Subtitle, What plays, Past message.
+ */
+async function importSchedule() {
+    const c = coll('schedule');
+    const { items: broadcasts } = await api('/api/admin/items/broadcasts');
+    const d = document.createElement('dialog');
+    d.className = 'dlg wide';
+    setHTML(d, html `<form method="dialog"><h3>Import the programme plan</h3>
+    <p class="muted">One programme per line, separated by commas or tabs (paste straight from a spreadsheet):<br>
+    <code>Days, Starts, Ends, Programme, Subtitle, What plays, Past message</code><br>
+    Days: Every day, Weekdays, Weekends, Mondays … Sundays. What plays: live, replay or rotation. Ends and the rest are optional.</p>
+    <textarea class="inp" name="csv" rows="9" aria-label="Programme plan" placeholder="Sundays, 09:00, 12:00, Sunday Service, Live from Douala, live&#10;Every day, 18:30, , Christ the Rock, Replay with live chat, replay, Christ the Rock"></textarea>
+    <p class="err" data-ierr hidden></p>
+    <div class="row end"><button value="cancel" class="btn" formnovalidate>Cancel</button><button value="ok" class="btn primary" data-go>Import</button></div></form>`);
+    document.body.appendChild(d);
+    d.showModal();
+    return new Promise((resolve) => {
+        let created = 0;
+        d.addEventListener('close', () => { d.remove(); resolve(created); });
+        $('[data-go]', d).addEventListener('click', async (e) => {
+            e.preventDefault();
+            const errBox = $('[data-ierr]', d);
+            const lines = String(d.querySelector('textarea').value).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+            const rows = [];
+            const errors = [];
+            const kind = { live: SOURCES.live, replay: SOURCES.replay, rotation: SOURCES.rotation };
+            lines.forEach((line, i) => {
+                const cols = line.split(line.includes('\t') ? '\t' : ',').map((x) => x.trim());
+                if (i === 0 && /^days$/i.test(cols[0]))
+                    return; // header row
+                const [days, time, end, title, subtitle, what, past] = cols;
+                const src = kind[(what || 'live').toLowerCase()] || what;
+                const b = past ? broadcasts.find((x) => String(x.title).toLowerCase() === past.toLowerCase()) : undefined;
+                const pad = (t) => (t && /^\d:\d\d$/.test(t) ? '0' + t : t || '');
+                const v = validate(c.fields, { days: days || 'Every day', time: pad(time), end: pad(end), title, subtitle, source: src, broadcast: b?.id || '' });
+                if (src === SOURCES.replay && !b)
+                    v.errors.broadcast = past ? `no past message called “${past}”` : 'name the past message to play';
+                const msgs = Object.values(v.errors);
+                if (msgs.length)
+                    errors.push(`Line ${i + 1}: ${msgs.join('; ')}`);
+                else
+                    rows.push(v.data);
+            });
+            if (!rows.length && !errors.length) {
+                errBox.textContent = 'Paste at least one line.';
+                errBox.hidden = false;
+                return;
+            }
+            if (errors.length) {
+                errBox.textContent = errors.slice(0, 6).join(' · ');
+                errBox.hidden = false;
+                return;
+            }
+            try {
+                for (const r of rows) {
+                    await api('/api/admin/items/schedule', { method: 'POST', body: { ...r, status: 'published' } });
+                    created++;
+                }
+                toast(`Imported ${created} programme${created === 1 ? '' : 's'}`);
+                d.close();
+            }
+            catch (err) {
+                errBox.textContent = err.message;
+                errBox.hidden = false;
+            }
+        });
+    });
+}
 /* ---------- live ---------- */
 async function livePage() {
     title('Live & chat');
-    const { live } = await api('/api/admin/live');
+    const okLive = alive();
+    const [{ live }, sch, brs] = await Promise.all([
+        api('/api/admin/live'),
+        api('/api/admin/items/schedule'),
+        api('/api/admin/items/broadcasts'),
+    ]);
+    if (!okLive())
+        return;
     const viewers = 0;
     const onAir = !!live.onAir;
+    const shown = (xs) => xs.filter((i) => i.status === 'published' && Date.parse(i.publishedAt) <= Date.now());
+    const input = { live, schedule: shown(sch.items), broadcasts: shown(brs.items) };
+    const n = onNow(input);
+    const next = upNext(input, new Date(), 3);
+    const feed = live.status === 'live' ? html `<span class="dotlive"></span>Studio is streaming${live.statusAt ? html ` <span class="muted">since ${new Date(String(live.statusAt)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : ''}`
+        : live.status === 'idle' ? html `Studio not streaming <span class="muted">· last stream ended ${rel(String(live.statusAt))}</span>`
+            : html `<span class="muted">No signal from the streaming service yet. Finish the setup below.</span>`;
+    const nowText = n.kind === 'live' ? `Live: ${live.title}` : n.video ? `${n.kind === 'replay' ? 'Replay' : 'Rotation'}: ${n.video.title}` : 'Off air';
+    const webhook = `${String(window.PKO_CONFIG?.supabaseUrl || 'https://YOUR-PROJECT.supabase.co').replace(/\/$/, '')}/functions/v1/stream-webhook`;
     setHTML(view(), html `<div class="cols live">
-    <section class="card"><div class="onair ${onAir ? 'on' : ''}"><div><b>${onAir ? 'On air' : 'Off air'}</b><span class="muted">${onAir ? 'Members can watch now and chat.' : 'The TV tab shows replays and the schedule.'}</span></div>
+    <section class="card"><div class="onair ${onAir ? 'on' : ''}"><div><b>${onAir ? 'On air' : 'Off air'}</b><span class="muted">${onAir ? 'Members can watch now and chat.' : live.channel24 ? 'The channel is playing replays between programmes.' : 'The TV tab shows past messages and the schedule.'}</span></div>
       <button class="btn ${onAir ? 'danger' : 'primary'}" data-onair="${onAir ? '0' : '1'}">${ic('live')}${onAir ? 'End live service' : 'Go live'}</button></div>
+      <div class="chan" data-channel><div><span class="lbl">Studio feed</span><p>${feed}</p></div>
+        <div><span class="lbl">On the channel now</span><p>${nowText}</p></div>
+        <div><span class="lbl">Up next</span><p>${next.length ? next.map((a, i) => html `${i ? ' · ' : ''}${airLabel(a.start)} ${a.slot.title}`) : html `<span class="muted">Nothing scheduled. <a href="#/c/schedule">Add programmes</a></span>`}</p></div></div>
       <form data-liveform novalidate><div data-form></div><button class="btn primary" type="submit">${ic('check')}Save stream details</button></form></section>
     <section class="card chatbox"><div class="row between"><h2 class="h2">Live chat</h2><span class="muted" data-viewers>${viewers} watching</span></div>
       <div class="chatlog" data-chatlog aria-live="polite"></div>
       <form class="row" data-modchat><input class="inp grow" name="name" value="${me.name}" aria-label="Post as" style="max-width:150px" maxlength="60"><input class="inp grow" name="body" placeholder="Message as moderator" maxlength="300" aria-label="Message" autocomplete="off"><button class="btn primary" aria-label="Send">${ic('send')}</button></form>
-      <p class="muted small">Moderator messages appear in gold. Hover a message to remove it.</p></section></div>`);
-    const fields = schema.live.filter((f) => f.key !== 'onAir');
+      <p class="muted small">Moderator messages appear in gold. Hover a message to remove it.</p></section></div>
+    <details class="card setup" ${live.status ? '' : 'open'}><summary><b>Connect vMix to the app</b> <span class="muted">one-time setup</span></summary>
+      <ol>
+        <li>At your streaming service (Cloudflare Stream recommended), create a <b>live input</b> with recording set to <b>automatic</b>.</li>
+        <li>In vMix: <b>Settings → Streaming → Destination: Custom RTMP Server</b>. Paste the service's RTMPS URL and stream key, then press <b>Stream</b>. Keep the stream key in vMix only; never paste it here.</li>
+        <li>Copy the live input's <b>HLS playback link</b> (.m3u8) into <b>Stream playback URL</b> above and save. It stays the same every week.</li>
+        <li>Add this webhook at the streaming service so the app goes on air by itself and saves each programme to Past messages:<br><code class="copy" data-copy="${webhook}">${webhook}</code></li>
+      </ol>
+      <p class="muted small">Full guide with the webhook secrets: <code>docs/LIVE-TV.md</code> in the repository.</p></details>`);
+    $('[data-copy]')?.addEventListener('click', (e) => { navigator.clipboard?.writeText(e.currentTarget.dataset.copy).then(() => toast('Webhook address copied'), () => { }); });
+    const fields = schema.live.filter((f) => f.key !== 'onAir' && !f.hidden);
     const form = new SchemaForm($('[data-form]'), fields, live);
     currentForm = form;
     await form.loadMediaMeta();
@@ -409,7 +548,7 @@ async function livePage() {
         if (!want && !(await confirmDialog('End the live service?', 'The TV tab will switch to replays for everyone.', 'End live', true)))
             return;
         try {
-            await api('/api/admin/live', { method: 'PUT', body: { ...form.state, onAir: want } });
+            await api('/api/admin/live', { method: 'PUT', body: { ...validate(fields, form.state).data, onAir: want } });
             form.dirty = false;
             toast(want ? 'You are live' : 'Live service ended');
             route();

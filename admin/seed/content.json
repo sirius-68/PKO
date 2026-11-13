@@ -120,7 +120,12 @@
   "ref": "Luke 4:14-21",
   "video": "v_anoint.mp4",
   "url": null,
-  "poster": "f_anoint.webp"
+  "poster": "f_anoint.webp",
+  "timezone": "Africa/Douala",
+  "channel24": true,
+  "autoOnAir": true,
+  "autoArchive": true,
+  "archiveCategory": "Services"
  },
  "items": [
   {
@@ -230,7 +235,8 @@
     "category": "Crusades",
     "video": "v_douala.mp4",
     "url": null,
-    "poster": "f_douala.webp"
+    "poster": "f_douala.webp",
+    "duration": 176
    }
   },
   {
@@ -242,7 +248,8 @@
     "category": "Ministration",
     "video": "v_heaven.mp4",
     "url": null,
-    "poster": "f_heaven.webp"
+    "poster": "f_heaven.webp",
+    "duration": 60
    }
   },
   {
@@ -254,7 +261,8 @@
     "category": "Teachings",
     "video": "v_rock.mp4",
     "url": null,
-    "poster": "f_rock.webp"
+    "poster": "f_rock.webp",
+    "duration": 53
    }
   },
   {
@@ -922,27 +930,60 @@
    "collection": "schedule",
    "hoursAgo": 0,
    "data": {
-    "time": "12:00",
+    "title": "Sunday Service",
+    "subtitle": "Live from Douala with Prophet Kevin",
+    "days": "Sundays",
+    "time": "09:00",
+    "end": "12:00",
+    "source": "Live from the studio"
+   }
+  },
+  {
+   "collection": "schedule",
+   "hoursAgo": 0,
+   "data": {
     "title": "Midday Word",
-    "subtitle": "15 minutes in the Scriptures"
+    "subtitle": "15 minutes in the Scriptures",
+    "days": "Weekdays",
+    "time": "12:00",
+    "end": "12:15",
+    "source": "Latest messages on rotation"
    }
   },
   {
    "collection": "schedule",
    "hoursAgo": 0,
    "data": {
-    "time": "18:30",
     "title": "Christ the Rock",
-    "subtitle": "Replay with live chat"
+    "subtitle": "Replay with live chat",
+    "days": "Every day",
+    "time": "18:30",
+    "source": "A past message",
+    "broadcast": "@Christ the Rock"
    }
   },
   {
    "collection": "schedule",
    "hoursAgo": 0,
    "data": {
-    "time": "21:00",
+    "title": "Wednesday Bible study",
+    "subtitle": "Live teaching and questions",
+    "days": "Wednesdays",
+    "time": "19:00",
+    "end": "20:30",
+    "source": "Live from the studio"
+   }
+  },
+  {
+   "collection": "schedule",
+   "hoursAgo": 0,
+   "data": {
     "title": "Midnight prayer line",
-    "subtitle": "Bring your prayer points"
+    "subtitle": "Bring your prayer points",
+    "days": "Every day",
+    "time": "21:00",
+    "end": "22:30",
+    "source": "Live from the studio"
    }
   }
  ]

@@ -30,11 +30,16 @@ export async function importStarterContent(onProgress) {
     onProgress(++done, total, 'Settings');
     await supa.rpc('admin_save_live', { p: ref(seed.live) });
     onProgress(++done, total, 'Live stream');
+    // Schedule slots point at past messages by title ("@Christ the Rock"); swap in the new ids.
+    const byTitle = new Map();
+    const link = (d) => (typeof d.broadcast === 'string' && d.broadcast.startsWith('@') ? { ...d, broadcast: byTitle.get(d.broadcast.slice(1)) || null } : d);
     for (const it of seed.items) {
-        await supa.rpc('admin_save', {
-            p_collection: it.collection, p_id: null, p_data: ref(it.data), p_status: 'published',
+        const saved = await supa.rpc('admin_save', {
+            p_collection: it.collection, p_id: null, p_data: link(ref(it.data)), p_status: 'published',
             p_published_at: new Date(Date.now() - it.hoursAgo * 3600e3).toISOString(),
         });
+        if (it.collection === 'broadcasts' && saved?.title)
+            byTitle.set(saved.title, saved.id);
         onProgress(++done, total, `Creating ${it.collection}`);
     }
     return seed.items.length;

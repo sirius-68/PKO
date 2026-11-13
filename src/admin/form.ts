@@ -34,7 +34,7 @@ export class SchemaForm {
   get busy(): boolean { return this.uploading > 0; }
 
   render(): void {
-    setHTML(this.root, html`${this.fields.map((f) => this.field(f, f.key, this.state[f.key]))}`);
+    setHTML(this.root, html`${this.fields.filter((f) => !f.hidden).map((f) => this.field(f, f.key, this.state[f.key]))}`);
   }
 
   private field(f: Field, path: string, v: unknown): SafeHTML {
@@ -57,12 +57,14 @@ export class SchemaForm {
         return html`<div class="fld sm">${label}<input class="inp" type="number" inputmode="numeric" ${common} value="${v ?? ''}" ${f.min !== undefined ? raw(`min="${f.min}"`) : ''} ${f.max !== undefined ? raw(`max="${f.max}"`) : ''}>${help}${err}</div>`;
       case 'date':
         return html`<div class="fld sm">${label}<input class="inp" type="date" ${common} value="${v ?? ''}">${help}${err}</div>`;
+      case 'time':
+        return html`<div class="fld sm">${label}<input class="inp" type="time" ${common} value="${v ?? ''}">${help}${err}</div>`;
       case 'select': {
         const opts = [...new Set([...(f.options || []), ...(v ? [String(v)] : [])])];
         if (f.allowCustom) {
           return html`<div class="fld sm">${label}<input class="inp" type="text" list="dl_${id}" ${common} value="${v ?? ''}" placeholder="Choose or type"><datalist id="dl_${id}">${opts.map((o) => html`<option value="${o}">`)}</datalist>${help}${err}</div>`;
         }
-        return html`<div class="fld sm">${label}<select class="inp" ${common}><option value="">Choose…</option>${opts.map((o) => html`<option ${o === v ? 'selected' : ''}>${o}</option>`)}</select>${help}${err}</div>`;
+        return html`<div class="fld sm">${label}<select class="inp" ${common}><option value="">${f.optionsFrom ? 'None' : 'Choose…'}</option>${opts.map((o) => html`<option value="${o}" ${o === v ? 'selected' : ''}>${f.optionLabels?.[o] ?? o}</option>`)}</select>${help}${err}</div>`;
       }
       case 'bool':
         return html`<div class="fld"><label class="toggle"><input type="checkbox" ${common} ${v ? 'checked' : ''}><span class="sw"></span><b>${f.label}</b></label>${help}${err}</div>`;

@@ -150,7 +150,7 @@ export function miniPlayer() {
 let tvVideo = null;
 let idleTimer;
 export const tv = () => tvVideo;
-export function mountTV(src, live) {
+export function mountTV(src, mode, opts = {}) {
     const v = $('#tvv');
     if (!v)
         return;
@@ -163,12 +163,22 @@ export function mountTV(src, live) {
         overlayMsg('This stream format plays in the mobile app. Open it on your phone to watch.');
         return;
     }
+    const live = mode === 'live';
     v.src = src;
     v.loop = live;
-    v.muted = live; // muted autoplay is allowed everywhere; user taps for sound
+    v.muted = mode !== 'vod'; // muted autoplay is allowed everywhere; user taps for sound
+    v.dataset.mode = mode;
     v.addEventListener('timeupdate', tvProg);
-    v.addEventListener('loadedmetadata', () => { const d = $('#tvdur'); if (d && !live && v.duration)
-        d.textContent = mmss(v.duration); });
+    v.addEventListener('loadedmetadata', () => {
+        const d = $('#tvdur');
+        if (d && !live && v.duration)
+            d.textContent = mmss(v.duration);
+        // Join the programme where it is now, as if it had been playing all along.
+        if (mode === 'channel' && opts.offset && v.duration && opts.offset < v.duration - 1)
+            v.currentTime = opts.offset;
+    }, { once: true });
+    if (mode === 'channel' && opts.onEnded)
+        v.addEventListener('ended', opts.onEnded, { once: true });
     for (const ev of ['play', 'pause', 'ended', 'volumechange', 'playing'])
         v.addEventListener(ev, tvSync);
     v.addEventListener('error', () => overlayMsg("The video couldn't load. Check your connection and try again."));
@@ -233,7 +243,7 @@ export function tvToggle() {
 export function tvMute() { const v = tvVideo; if (!v)
     return; v.muted = !v.muted; if (!v.muted && v.paused)
     v.play().catch(() => { }); tvSync(); armIdle(); }
-export function tvSeek(frac) { const v = tvVideo; if (!v || !v.duration)
+export function tvSeek(frac) { const v = tvVideo; if (!v || !v.duration || v.dataset.mode === 'channel')
     return; v.currentTime = Math.max(0, Math.min(1, frac)) * v.duration; tvProg(); armIdle(); }
 export function tvFullscreen() {
     const v = tvVideo;

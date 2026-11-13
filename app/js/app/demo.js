@@ -4,6 +4,7 @@
  * does — signing in with a name, Amens, comments, chat, testimonies — stays on
  * the device. Used for preview APKs before Supabase is connected.
  */
+import { airings, SOURCES } from '../shared/channel.js';
 import { getItem, setItem } from './native.js';
 const KEY = 'pko.demo';
 let seed = null;
@@ -39,6 +40,10 @@ export async function demoBundle() {
             d.tracks = (it.data.tracks || []).map((t, j) => ({ audio: null, duration: null, ...t, id: `tr${j}` }));
         by[it.collection]?.push(d);
     });
+    // Schedule slots name their past message by title ("@Christ the Rock").
+    for (const s of by.schedule)
+        if (typeof s.broadcast === 'string' && s.broadcast.startsWith('@'))
+            s.broadcast = by.broadcasts.find((b) => b.title === s.broadcast.slice(1))?.id || null;
     const desc = (a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt));
     for (const k of ['posts', 'broadcasts', 'albums', 'testimonies', 'photos'])
         by[k].sort(desc);
@@ -51,8 +56,14 @@ export async function demoBundle() {
     const comments = {};
     for (const [t, list] of Object.entries(l.comments))
         comments[t] = list.length;
+    // The demo studio is "on air" during the schedule's live programmes, like the real channel
+    // when vMix is streaming; the rest of the time the 24/7 channel plays replays.
+    const live = { ...seed.live };
+    const at = new Date();
+    live.onAir = airings({ live, schedule: by.schedule, broadcasts: by.broadcasts }, at, new Date(at.getTime() + 1))
+        .some((a) => (a.slot.source || SOURCES.live) === SOURCES.live && a.start <= at && at < a.end);
     return {
-        version: 1, settings: seed.settings, live: seed.live,
+        version: live.onAir ? 2 : 1, settings: seed.settings, live,
         ...by,
         amens, comments,
     };

@@ -37,8 +37,13 @@ before(async () => {
 });
 after(async () => { await browser?.close(); server?.close(); });
 
+// 2026-11-15 is a Sunday: 10:00 in Douala is during the seed's live Sunday Service.
+const SUNDAY_SERVICE = new Date(Date.UTC(2026, 10, 15, 9, 0));
+const MONDAY_AFTERNOON = new Date(Date.UTC(2026, 10, 16, 14, 0));
+
 test('demo build: full tour with no backend', async () => {
   const { ctx, page, mon } = await newPage(browser, 'pixel-7', base);
+  await page.clock.setFixedTime(SUNDAY_SERVICE);
   await page.goto(base + '/');
   await page.waitForSelector('#onboard:not([hidden])', { timeout: 15000 });
   await page.click('#obSkip');
@@ -102,6 +107,27 @@ test('demo build: full tour with no backend', async () => {
   await page.waitForSelector('#shell:not([hidden]) #feed article');
   assert.equal((await page.textContent('.topbar .me'))!.trim(), 'D', 'still signed in');
   const issues = [...found, ...mon.take()];
+  assert.deepEqual(issues, [], issues.join('\n'));
+  await ctx.close();
+});
+
+test('demo build: between live programmes the 24/7 channel plays replays', async () => {
+  const { ctx, page, mon } = await newPage(browser, 'iphone-13', base);
+  await page.clock.setFixedTime(MONDAY_AFTERNOON);
+  await page.goto(base + '/');
+  await page.waitForSelector('#onboard:not([hidden])', { timeout: 15000 });
+  await page.click('#obSkip');
+  await page.click('[data-enter]:not([data-enter="signin"])');
+  await page.click('.tab[data-go="tv"]');
+  await page.waitForSelector('.player .ch-pill');
+  await page.waitForFunction(() => { const v = document.querySelector<HTMLVideoElement>('#tvv'); return !!v && v.readyState >= 2 && !v.paused; }, null, { timeout: 15000 });
+  assert.equal(await page.locator('.tab .dot').count(), 0, 'not live');
+  await page.click('[data-tvpane="next"]');
+  await page.waitForSelector('#tvpane .sched .tm.now');
+  const plan = (await page.textContent('#tvpane')) || '';
+  for (const p of ['Christ the Rock', 'Midnight prayer line', 'Wednesday Bible study']) assert.ok(plan.includes(p), p);
+  await shot(page, 'demo-tv-channel');
+  const issues = [...await auditLayout(page, 'demo-tv-channel'), ...mon.take()];
   assert.deepEqual(issues, [], issues.join('\n'));
   await ctx.close();
 });

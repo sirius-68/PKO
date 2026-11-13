@@ -144,5 +144,5 @@ export async function uploadFile(file: File, onProgress: (p: number) => void): P
   return supa.rpc<MediaRow>('admin_register_media', { p_id: path, p_mime: type, p_size: file.size, p_name: file.name });
 }
 
-export const mediaUrl = (id: string) => supa.publicUrl(id);
+export const mediaUrl = (id: string) => (/^https:\/\//.test(id) ? id : supa.publicUrl(id));
 export { SupaError };

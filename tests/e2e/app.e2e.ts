@@ -252,9 +252,24 @@ describe('Transfiguration TV', () => {
     await page.waitForSelector('.player .live-pill');
     // the media team ends the service: the app updates without a reload
     await admin.rpcOk('admin_save_live', { p: { onAir: false } });
-    await page.waitForSelector('.offair', { timeout: 8000 });
+    // 24/7: the channel carries on with replays instead of going dark
+    await page.waitForSelector('.player .ch-pill', { timeout: 8000 });
     assert.equal(await page.isVisible('.tab .dot'), false, 'live dot removed');
+    await page.waitForFunction(() => { const v = document.querySelector<HTMLVideoElement>('#tvv'); return !!v && !!v.getAttribute('src') && v.readyState >= 1; });
+    assert.equal(await page.locator('[data-seek]').count(), 0, 'no seeking on the channel, like TV');
+    assert.match((await page.textContent('#topbar')) || '', /On TV now/);
+    await page.click('[data-tvpane="next"]');
+    await page.waitForSelector('#tvpane .sched .tm.now');
+    assert.ok((await page.locator('#tvpane .sched').count()) >= 4, 'now + coming programmes');
+    assert.ok((await page.locator('#tvpane .tag').count()) >= 3, 'each programme says live / replay / rotation');
+    await shot(page, 'app-tv-channel');
+    // with the 24/7 channel switched off, it goes off air between programmes
+    await admin.rpcOk('admin_save_live', { p: { channel24: false } });
+    await page.waitForSelector('.offair', { timeout: 8000 });
+    assert.match((await page.textContent('.offair')) || '', /Next: /);
     await shot(page, 'app-tv-offair');
+    await admin.rpcOk('admin_save_live', { p: { channel24: true } });
+    await page.waitForSelector('.player .ch-pill', { timeout: 8000 });
     await admin.rpcOk('admin_save_live', { p: { onAir: true } });
     await page.waitForSelector('.player .live-pill', { timeout: 8000 });
     expectClean('tv monitor', mon.take());

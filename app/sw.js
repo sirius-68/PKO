@@ -1,9 +1,9 @@
 // Offline app shell for the web (PWA) build. Content and media are cached on use;
 // the API bundle is always fetched fresh first and falls back to cache when offline.
-const SHELL = 'pko-shell-v2';
+const SHELL = 'pko-shell-v3';
 const RUNTIME = 'pko-runtime-v1';
 const ASSETS = ['./', 'index.html', 'styles.css', 'config.js', 'manifest.webmanifest', 'icons/logo.webp', 'icons/icon-192.png',
-  'js/app/main.js', 'js/app/lib.js', 'js/app/api.js', 'js/app/store.js', 'js/app/native.js', 'js/app/ui.js', 'js/app/views.js', 'js/app/media.js', 'js/app/pages.js', 'js/shared/supa.js'];
+  'js/app/main.js', 'js/app/lib.js', 'js/app/api.js', 'js/app/store.js', 'js/app/native.js', 'js/app/ui.js', 'js/app/views.js', 'js/app/media.js', 'js/app/pages.js', 'js/shared/supa.js', 'js/shared/channel.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

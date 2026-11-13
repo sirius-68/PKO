@@ -14,6 +14,7 @@ The Apostolic Gospel Mission's app: a **mobile app** for members, a **creator da
 | Creator dashboard | Upload and manage everything in the app; moderation; going live. | `src/admin` → `admin/` |
 | Backend | One SQL migration with tables, row-level security, storage rules and every function the apps call. | `supabase/migrations/` |
 | Supabase client | A small dependency-free client used by both apps: database calls, auth, storage uploads with progress, and live updates. | `src/shared/supa.ts` |
+| 24/7 TV channel | vMix → streaming service → app. Plays live when the studio streams, scheduled replays and rotation the rest of the time; saves recordings to Past messages. **Setup: [docs/LIVE-TV.md](docs/LIVE-TV.md)** | `src/shared/channel.ts`, `supabase/functions/stream-webhook/` |
 
 ## Going live (test setup)
 
@@ -82,6 +83,8 @@ npm test                          # backend + end-to-end UI tests
 Both need a local Postgres 16 with trust auth (`PGHOST`, `PGPORT`, `PGUSER`). CI uses a Postgres service container.
 
 **Tests (all passing):**
+- **14 channel tests:** time zones and daylight saving, the weekly plan, replays joined at the right point, and rotation that stays in step across devices.
+- **14 live-pipeline tests:** Cloudflare and Mux webhook signatures and payloads, going on air automatically, saving recordings once, and rejecting forged or stale calls.
 - **30 backend tests:** what guests and members can and can't do, admin-only functions, storage rules, validation, rate limits, moderation, and live updates over WebSocket.
 - **20 member-app tests:** Chrome on iPhone SE, iPhone 13, Pixel 7, iPad mini and desktop sizes.
 - **9 dashboard tests,** including first-owner setup and the starter-content import.
@@ -90,12 +93,14 @@ A UI monitor fails a test on any JS error, failed request or server error. A lay
 
 ## Known limitations / next steps
 - **Member sign-in uses a name only.** The phone number is stored but not verified. Supabase Auth can add SMS one-time codes (Twilio and others) and upgrade these anonymous accounts in place.
-- **HLS live streams** play natively on Android, iOS and Safari. Desktop Chrome and Firefox show a "watch on your phone" message.
+- **HLS streams** play natively on Android, iOS, Safari, and desktop Chrome and Edge (version 142+). Firefox shows a "watch on your phone" message.
+- **Streaming costs** are per minute watched (see [docs/LIVE-TV.md](docs/LIVE-TV.md#costs)). YouTube Live is free but isn't playable in the app yet.
 - **Seed content** is the prototype's placeholder copy, and songs show "Soon" until audio is uploaded.
 
 ## Layout
 ```
 supabase/migrations/   the backend (schema, RLS, storage policies, RPCs)
+supabase/functions/    stream-webhook Edge Function (streaming service → channel events)
 supabase/local/        Supabase emulator + Postgres client for local dev/tests only
 src/app/               member app        → app/js
 src/admin/             dashboard         → admin/js   (backend.ts maps screens → RPCs)

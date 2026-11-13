@@ -98,8 +98,12 @@ export async function seedContent(admin: Client) {
   }
   await admin.rpcOk('admin_save_settings', { p: ref(seed.settings) });
   await admin.rpcOk('admin_save_live', { p: ref(seed.live) });
+  const byTitle = new Map<string, string>();
   for (const it of seed.items) {
-    await admin.rpcOk('admin_save', { p_collection: it.collection, p_id: null, p_data: ref(it.data), p_status: 'published', p_published_at: new Date(Date.now() - it.hoursAgo * 3600e3).toISOString() });
+    const d = ref(it.data) as Record<string, unknown>;
+    if (typeof d.broadcast === 'string' && d.broadcast.startsWith('@')) d.broadcast = byTitle.get(d.broadcast.slice(1));
+    const saved = await admin.rpcOk('admin_save', { p_collection: it.collection, p_id: null, p_data: d, p_status: 'published', p_published_at: new Date(Date.now() - it.hoursAgo * 3600e3).toISOString() });
+    if (it.collection === 'broadcasts') byTitle.set(saved.title, saved.id);
   }
 }
 

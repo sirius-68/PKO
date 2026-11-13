@@ -1,3 +1,5 @@
+import { DAY_OPTIONS, SOURCE_OPTIONS, SOURCES, isTime } from './channel.js';
+
 /**
  * Content schema — the single source of truth for every content type.
  * The API validates against it and the creator dashboard builds its forms from it
@@ -6,7 +8,7 @@
 
 export type FieldType =
   | 'text' | 'longtext' | 'paragraphs' | 'number' | 'date' | 'datetime'
-  | 'select' | 'image' | 'video' | 'audio' | 'file' | 'bool' | 'position' | 'list';
+  | 'select' | 'image' | 'video' | 'audio' | 'file' | 'bool' | 'position' | 'list' | 'time';
 
 export interface Field {
   key: string;
@@ -21,6 +23,14 @@ export interface Field {
   default?: unknown;
   fields?: Field[];            // list: shape of each row
   listLabel?: string;          // list: singular row label
+  /** select: options are item ids from this collection, filled in by the dashboard. */
+  optionsFrom?: string;
+  /** select: display labels for option values (the dashboard sets these for optionsFrom). */
+  optionLabels?: Record<string, string>;
+  /** image/video: an https:// link is accepted as well as an upload (e.g. a stream thumbnail). */
+  allowUrl?: boolean;
+  /** Kept and validated, but not shown in the dashboard form (set by the system). */
+  hidden?: boolean;
 }
 
 export interface Collection {
@@ -61,7 +71,9 @@ export const COLLECTIONS: Collection[] = [
       { key: 'category', label: 'Category', type: 'select', options: ['Teachings', 'Ministration', 'Crusades', 'Services'], allowCustom: true, required: true },
       { key: 'video', label: 'Video file', type: 'video', help: 'MP4 (H.264) plays everywhere.' },
       { key: 'url', label: '…or video URL', type: 'text', max: 600, help: 'An MP4 or HLS (.m3u8) link, used when no file is uploaded.' },
-      { key: 'poster', label: 'Thumbnail', type: 'image', required: true },
+      { key: 'poster', label: 'Thumbnail', type: 'image', required: true, allowUrl: true },
+      { key: 'duration', label: 'Length (seconds)', type: 'number', min: 1, max: 86400, help: 'Filled in when you save. The 24/7 channel only plays messages with a known length.' },
+      { key: 'sourceId', label: 'Recording id', type: 'text', max: 120, hidden: true },
     ],
   },
   {
@@ -132,12 +144,17 @@ export const COLLECTIONS: Collection[] = [
     ],
   },
   {
-    key: 'schedule', label: 'TV schedule', singular: 'Schedule slot', icon: 'clock', titleField: 'title',
+    key: 'schedule', label: 'TV schedule', singular: 'Programme', icon: 'clock', titleField: 'title',
     sort: 'manual',
     fields: [
-      { key: 'time', label: 'Time', type: 'text', required: true, max: 10, help: '24-hour time, e.g. 18:30' },
       { key: 'title', label: 'Programme', type: 'text', required: true, max: 140 },
       { key: 'subtitle', label: 'Subtitle', type: 'text', max: 140 },
+      { key: 'days', label: 'Days', type: 'select', options: DAY_OPTIONS, required: true, default: 'Every day' },
+      { key: 'time', label: 'Starts', type: 'time', required: true, help: 'Channel time (set on the Live page). Viewers see it in their own time.' },
+      { key: 'end', label: 'Ends', type: 'time', help: 'Optional. Live programmes run 2 hours, replays run their length.' },
+      { key: 'source', label: 'What plays', type: 'select', options: SOURCE_OPTIONS, required: true, default: SOURCES.live,
+        help: 'Live: the vMix stream when the studio is on air. Past message: a replay at this time. Rotation: the latest messages.' },
+      { key: 'broadcast', label: 'Past message to play', type: 'select', options: [], optionsFrom: 'broadcasts' },
     ],
   },
 ];
@@ -160,11 +177,21 @@ export const SETTINGS_FIELDS: Field[] = [
 
 export const LIVE_FIELDS: Field[] = [
   { key: 'onAir', label: 'On air now', type: 'bool', default: false },
-  { key: 'title', label: 'Service title', type: 'text', required: true, max: 140 },
+  { key: 'title', label: 'Service title', type: 'text', required: true, max: 140, help: 'Filled from the schedule when the studio goes live automatically.' },
   { key: 'ref', label: 'Scripture or subtitle', type: 'text', max: 80 },
-  { key: 'video', label: 'Stream file', type: 'video', help: 'Loops while on air. Use a URL below for a real live feed.' },
-  { key: 'url', label: '…or stream URL', type: 'text', max: 600, help: 'HLS (.m3u8) or MP4. HLS plays natively on iOS, Android and Safari.' },
+  { key: 'url', label: 'Stream playback URL', type: 'text', max: 600,
+    help: 'The permanent HLS link (.m3u8) from your streaming service. vMix streams to the service; the app plays this link.' },
+  { key: 'video', label: '…or a stream file', type: 'video', help: 'Loops while on air. For testing without a streaming service.' },
   { key: 'poster', label: 'Poster image', type: 'image', required: true },
+  { key: 'timezone', label: 'Channel time zone', type: 'text', required: true, max: 60, default: 'Africa/Douala', help: 'The schedule\'s times are in this zone, e.g. Africa/Douala, Europe/London.' },
+  { key: 'channel24', label: 'Run the channel 24/7', type: 'bool', default: true, help: 'Between live programmes, play scheduled replays and the latest messages, like a TV channel.' },
+  { key: 'autoOnAir', label: 'Go on air when the studio starts streaming', type: 'bool', default: true, help: 'Needs the stream webhook (see setup below).' },
+  { key: 'autoArchive', label: 'Save each live programme to Past messages', type: 'bool', default: true },
+  { key: 'archiveCategory', label: 'Category for saved programmes', type: 'text', required: true, max: 40, default: 'Services' },
+  // Written by the stream webhook, shown on the Live page.
+  { key: 'status', label: 'Studio feed', type: 'text', max: 20, hidden: true },
+  { key: 'statusAt', label: 'Studio feed updated', type: 'text', max: 40, hidden: true },
+  { key: 'programme', label: 'Programme on air', type: 'text', max: 140, hidden: true },
 ];
 
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'file']);
@@ -194,7 +221,8 @@ export function validate(fields: Field[], input: unknown, opts: { partial?: bool
         if (typeof v !== 'string') { errors[f.key] = `${f.label} must be text`; break; }
         const s = v.trim();
         if (f.max && s.length > f.max) { errors[f.key] = `${f.label} must be ${f.max} characters or fewer`; break; }
-        if (f.type === 'select' && !f.allowCustom && f.options && !f.options.includes(s)) { errors[f.key] = `${f.label} must be one of ${f.options.join(', ')}`; break; }
+        if (f.type === 'select' && f.optionsFrom) { if (!/^[A-Za-z0-9_-]{1,40}$/.test(s)) { errors[f.key] = `Choose a ${f.label.toLowerCase()}`; break; } }
+        else if (f.type === 'select' && !f.allowCustom && f.options && !f.options.includes(s)) { errors[f.key] = `${f.label} must be one of ${f.options.join(', ')}`; break; }
         if (f.type === 'position' && !/^[a-z0-9 %.-]{1,40}$/i.test(s)) { errors[f.key] = `${f.label} looks invalid`; break; }
         if (f.required && !s) { errors[f.key] = `${f.label} is required`; break; }
         data[f.key] = s;
@@ -227,8 +255,14 @@ export function validate(fields: Field[], input: unknown, opts: { partial?: bool
         data[f.key] = new Date(v).toISOString();
         break;
       }
+      case 'time': {
+        if (!isTime(v)) { errors[f.key] = `${f.label} must be a 24-hour time like 18:30`; break; }
+        data[f.key] = v;
+        break;
+      }
       case 'bool': data[f.key] = v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; break;
       case 'image': case 'video': case 'audio': case 'file': {
+        if (f.allowUrl && typeof v === 'string' && /^https:\/\/\S{4,590}$/.test(v)) { data[f.key] = v; break; }
         if (typeof v !== 'string' || !/^[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$/.test(v) || v.includes('..')) { errors[f.key] = `${f.label} is not a valid upload`; break; }
         if (opts.mediaExists && !opts.mediaExists(v)) { errors[f.key] = `${f.label} file was not found — upload it again`; break; }
         data[f.key] = v;
@@ -257,7 +291,7 @@ export function mediaRefs(fields: Field[], data: Record<string, unknown>): strin
   const out: string[] = [];
   for (const f of fields) {
     const v = data[f.key];
-    if (MEDIA_TYPES.has(f.type) && typeof v === 'string' && v) out.push(v);
+    if (MEDIA_TYPES.has(f.type) && typeof v === 'string' && v && !/^https:\/\//.test(v)) out.push(v);
     if (f.type === 'list' && Array.isArray(v)) for (const row of v) out.push(...mediaRefs(f.fields || [], row as Record<string, unknown>));
   }
   return out;
