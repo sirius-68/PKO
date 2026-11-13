@@ -1,0 +1,16 @@
+{
+  "name": "Prophet Kevin Online",
+  "short_name": "PKO",
+  "description": "Transfiguration TV, the Prophet's blog, books and songs from the Apostolic Gospel Mission.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#130A20",
+  "theme_color": "#130A20",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

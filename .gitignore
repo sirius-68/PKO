@@ -1,0 +1,11 @@
+node_modules/
+server/data/
+test-results/
+.DS_Store
+*.log
+# Capacitor native build output (the ios/ and android/ projects themselves should be committed once created)
+ios/App/Pods/
+android/.gradle/
+android/app/build/
+app/demo/
+app/capacitor.js

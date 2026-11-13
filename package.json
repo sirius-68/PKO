@@ -1,0 +1,43 @@
+{
+  "name": "prophet-kevin-online",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prophet Kevin Online \u2014 Android/iOS member app (Capacitor), creator dashboard, on Supabase.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.app.json && tsc -p tsconfig.admin.json",
+    "config": "node scripts/write-config.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 tests/channel.test.ts tests/backend.test.ts tests/stream.test.ts tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts tests/e2e/demo.e2e.ts",
+    "test:backend": "node --test --test-concurrency=1 tests/channel.test.ts tests/backend.test.ts tests/stream.test.ts",
+    "test:e2e": "npm run build && node --test --test-concurrency=1 tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
+    "dev": "npm run build && node --no-warnings scripts/dev.ts",
+    "native:sync": "npm run build && node scripts/native-sync.mjs",
+    "android:apk": "npm run native:sync && cd android && ./gradlew assembleDebug",
+    "native:android": "npm run native:sync && npx cap open android",
+    "native:ios": "npm run native:sync && npx cap open ios",
+    "android:demo": "npm run build && DEMO=1 node scripts/write-config.mjs && node scripts/build-demo.mjs && npx cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@types/node": "^22.0.0",
+    "playwright": "^1.50.0",
+    "typescript": "^5.8.0"
+  }
+}

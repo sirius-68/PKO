@@ -1,0 +1,74 @@
+# Publishes the dashboard + web app to GitHub Pages and builds the Android APK.
+# One-time setup: Settings → Pages → Source = "GitHub Actions", and fill in supabase.config.json.
+name: Deploy
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions:
+  contents: write   # publish the APK as a GitHub Release
+  pages: write
+  id-token: write
+concurrency: { group: deploy, cancel-in-progress: true }
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url }}admin/' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund --ignore-scripts typescript
+      - run: npx tsc -p tsconfig.app.json && npx tsc -p tsconfig.admin.json
+      - name: Write config
+        env: { APP_URL: 'https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/app/' }
+        run: node scripts/write-config.mjs
+      - name: Assemble site
+        run: |
+          mkdir -p _site && cp -r app admin _site/
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=app/"><a href="app/">Open the app</a>\n' > _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip until Supabase is configured
+        id: cfg
+        run: node -e "const c=require('./supabase.config.json'); console.log('ok=' + !!(c.supabaseUrl && c.supabaseAnonKey))" >> "$GITHUB_OUTPUT"
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - if: steps.cfg.outputs.ok == 'true'
+        run: npm install --no-audit --no-fund
+      - if: steps.cfg.outputs.ok == 'true'
+        name: Build web + native project
+        env: { APP_URL: 'https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/app/' }
+        run: |
+          npm run build
+          node scripts/write-config.mjs
+          [ -d android ] || npx cap add android
+          npx capacitor-assets generate --android --iconBackgroundColor "#1E0D33" --splashBackgroundColor "#130A20" --assetPath app/icons
+          npx cap sync android
+      - if: steps.cfg.outputs.ok == 'true'
+        name: Build APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../prophet-kevin-online.apk
+      - if: steps.cfg.outputs.ok == 'true'
+        name: Publish as a GitHub Release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest prophet-kevin-online.apk --prerelease \
+            --title "Android app (test build, ${GITHUB_SHA::7})" \
+            --notes "Test build of the member app from commit ${GITHUB_SHA::7}. Install on Android: download the APK, open it, and allow installing from this source. Connected to $(node -p 'require(\"./supabase.config.json\").supabaseUrl')."

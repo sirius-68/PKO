@@ -1,0 +1,14 @@
+{
+  "appId": "org.apostolicgospelmission.pko",
+  "appName": "Prophet Kevin Online",
+  "webDir": "app",
+  "backgroundColor": "#130A20",
+  "server": { "androidScheme": "https" },
+  "ios": { "contentInset": "never", "backgroundColor": "#130A20", "limitsNavigationsToAppBoundDomains": false },
+  "android": { "backgroundColor": "#130A20", "allowMixedContent": false },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 1200, "launchAutoHide": true, "backgroundColor": "#130A20", "showSpinner": false },
+    "StatusBar": { "overlaysWebView": false, "style": "DARK", "backgroundColor": "#130A20" },
+    "LocalNotifications": { "iconColor": "#E8C15F" }
+  }
+}

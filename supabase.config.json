@@ -1,0 +1,5 @@
+{
+  "supabaseUrl": "",
+  "supabaseAnonKey": "",
+  "note": "Public values: the project URL and the anon key are meant to be shipped in apps. Row-level security in supabase/migrations protects the data. Never put the service_role key here."
+}
