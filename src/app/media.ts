@@ -1,5 +1,5 @@
 import { $, $$, html, ic, mmss, avColor, setHTML, esc, type SafeHTML } from './lib.js';
-import { API_BASE, mediaUrl, type ChatMsg, type Live } from './api.js';
+import { getLive, mediaUrl, supa, type ChatMsg, type Live } from './api.js';
 import { D, S } from './store.js';
 import { keepAwake } from './native.js';
 import { toast } from './ui.js';
@@ -183,37 +183,49 @@ export function leaveTV(): void {
 /* =========================================================
    LIVE ROOM — chat + viewers over Server-Sent Events
    ========================================================= */
-let es: EventSource | null = null;
+type Room = ReturnType<ReturnType<typeof supa.realtime>['channel']>;
+let room: Room | null = null;
 let messages: ChatMsg[] = [];
 let viewers = 0;
 let onLive: (l: Live) => void = () => {};
 export const onLiveChange = (fn: (l: Live) => void): void => { onLive = fn; };
 
-export function startChat(): void {
-  if (es) return;
-  es = new EventSource(API_BASE + '/api/live/stream');
-  es.addEventListener('hello', (e) => {
-    const d = JSON.parse((e as MessageEvent).data) as { viewers: number; messages: ChatMsg[]; live: Live };
-    messages = d.messages; viewers = d.viewers;
-    paintViewers(); renderChat();
-    if (JSON.stringify(d.live) !== JSON.stringify(D().live)) onLive(d.live);
-  });
-  es.addEventListener('message', (e) => {
-    const m = JSON.parse((e as MessageEvent).data) as ChatMsg;
-    if (messages.some((x) => x.id === m.id)) return;
-    messages.push(m);
-    if (messages.length > 80) messages.shift();
-    appendChat(m);
-  });
-  es.addEventListener('delete', (e) => {
-    const { id } = JSON.parse((e as MessageEvent).data) as { id: number };
-    messages = messages.filter((x) => x.id !== id);
-    $(`[data-msg="${id}"]`)?.remove();
-  });
-  es.addEventListener('viewers', (e) => { viewers = (JSON.parse((e as MessageEvent).data) as { viewers: number }).viewers; paintViewers(); });
-  es.addEventListener('live', (e) => onLive(JSON.parse((e as MessageEvent).data) as Live));
+const toMsg = (r: Record<string, unknown>): ChatMsg => ({ id: Number(r.id), name: String(r.name), body: String(r.body), isMod: !!r.is_mod, createdAt: String(r.created_at) });
+async function loadRecent() {
+  try {
+    const r = await getLive();
+    messages = r.messages;
+    renderChat();
+    if (S.data && JSON.stringify(r.live) !== JSON.stringify(S.data.live)) onLive(r.live);
+  } catch { /* offline: keep what we have */ }
 }
-export function stopChat(): void { es?.close(); es = null; }
+
+/** Joins the live room: chat + live state changes (postgres_changes) and viewer presence. */
+export function startChat(): void {
+  if (room || !supa.configured) return;
+  loadRecent();
+  room = supa.realtime().channel('live-room', { changes: [{ event: '*', table: 'chat' }, { event: '*', table: 'settings' }] })
+    .onChange((c) => {
+      if (c.table === 'chat') {
+        const m = toMsg(c.record);
+        if (c.type === 'INSERT' && !c.record.deleted) {
+          if (messages.some((x) => x.id === m.id)) return;
+          messages.push(m);
+          if (messages.length > 80) messages.shift();
+          appendChat(m);
+        } else if (c.type === 'UPDATE' && c.record.deleted) {
+          messages = messages.filter((x) => x.id !== m.id);
+          $(`[data-msg="${m.id}"]`)?.remove();
+        }
+      } else if (c.table === 'settings' && c.record.key === 'live') {
+        onLive(c.record.value as Live);
+      }
+    })
+    .onPresence((n) => { viewers = n; paintViewers(); })
+    .onStatus((st) => { if (st === 'joined') loadRecent(); }) // catch up after a reconnect
+    .track({ at: Date.now() });
+}
+export function stopChat(): void { room?.unsubscribe(); room = null; }
 export function setViewers(n: number): void { viewers = n; paintViewers(); }
 function paintViewers() {
   for (const x of $$('[data-viewers]')) { x.textContent = viewers.toLocaleString(); (x.parentElement as HTMLElement).style.visibility = viewers > 0 ? '' : 'hidden'; }

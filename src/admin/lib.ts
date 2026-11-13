@@ -17,57 +17,30 @@ export const setHTML = (el: Element, h: SafeHTML) => { el.innerHTML = h.s; };
 export const $ = <T extends Element = HTMLElement>(s: string, el: ParentNode = document) => el.querySelector<T>(s);
 export const $$ = <T extends Element = HTMLElement>(s: string, el: ParentNode = document) => [...el.querySelectorAll<T>(s)];
 
-export class ApiError extends Error {
-  status: number; details?: Record<string, string>;
-  constructor(status: number, msg: string, details?: Record<string, string>) { super(msg); this.status = status; this.details = details; }
-}
+import { request, uploadFile as backendUpload, mediaUrl as backendMediaUrl, SupaError, NotAdminError, type MediaRow as BackendMediaRow } from './backend.js';
+
+export const ApiError = SupaError;
+export type ApiError = SupaError;
+export { NotAdminError };
 let onUnauthorized: () => void = () => {};
 export const setUnauthorizedHandler = (fn: () => void) => { onUnauthorized = fn; };
 
 export async function api<T = Record<string, unknown>>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
-  let res: Response;
   try {
-    res = await fetch(path, {
-      method: opts.method || 'GET',
-      credentials: 'same-origin',
-      headers: { 'X-PKO-Admin': '1', ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-    });
-  } catch { throw new ApiError(0, "Couldn't reach the server. Check your connection."); }
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && !path.endsWith('/login')) onUnauthorized();
-  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error || 'Something went wrong', (data as { details?: Record<string, string> }).details);
-  return data as T;
+    return (await request(opts.method || 'GET', path, opts.body as Record<string, unknown> | undefined)) as T;
+  } catch (e) {
+    if (e instanceof SupaError && (e.status === 401 || (e.status === 403 && e.code === '42501')) && !path.endsWith('/login') && !path.endsWith('/me')) onUnauthorized();
+    throw e;
+  }
 }
+export const uploadFile = (file: File, onProgress: (p: number) => void): Promise<MediaRow> => backendUpload(file, onProgress);
 
-export function uploadFile(file: File, onProgress: (p: number) => void): Promise<MediaRow> {
-  return new Promise((resolve, reject) => {
-    const x = new XMLHttpRequest();
-    x.open('PUT', `/api/admin/media?name=${encodeURIComponent(file.name)}`);
-    x.withCredentials = true;
-    x.setRequestHeader('Content-Type', file.type || guessType(file.name));
-    x.setRequestHeader('X-PKO-Admin', '1');
-    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
-    x.onload = () => {
-      let d: { media?: MediaRow; error?: string } = {};
-      try { d = JSON.parse(x.responseText); } catch { /* ignore */ }
-      if (x.status === 201 && d.media) resolve(d.media); else reject(new ApiError(x.status, d.error || 'Upload failed'));
-    };
-    x.onerror = () => reject(new ApiError(0, 'Upload failed — check your connection and try again.'));
-    x.send(file);
-  });
-}
-function guessType(name: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() || '';
-  return ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', pdf: 'application/pdf' } as Record<string, string>)[ext] || 'application/octet-stream';
-}
-
-export interface MediaRow { id: string; mime: string; kind: 'image' | 'video' | 'audio' | 'file'; size: number; original_name: string; created_at: string }
-export interface Field { key: string; label: string; type: string; required?: boolean; options?: string[]; allowCustom?: boolean; help?: string; max?: number; min?: number; default?: unknown; fields?: Field[]; listLabel?: string }
-export interface Collection { key: string; label: string; singular: string; icon: string; titleField: string; imageField?: string; moderated?: boolean; fields: Field[]; sort: string }
+export type MediaRow = BackendMediaRow;
+export type { Field, Collection } from '../shared/schema.js';
+import type { Field, Collection } from '../shared/schema.js';
 export interface Schema { collections: Collection[]; settings: Field[]; live: Field[]; accept: string[]; maxUploadBytes: number }
 
-export const mediaUrl = (id: string) => `/media/${encodeURIComponent(id)}`;
+export const mediaUrl = (id: string) => backendMediaUrl(id);
 export const bytes = (n: number) => (n > 1e9 ? (n / 1e9).toFixed(1) + ' GB' : n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB');
 export function rel(isoTs: string): string {
   const s = (Date.now() - Date.parse(isoTs)) / 1000;

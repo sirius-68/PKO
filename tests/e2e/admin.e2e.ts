@@ -79,8 +79,8 @@ describe('creator dashboard', () => {
     await toast(page, /created/);
     await page.waitForFunction(() => /#\/c\/posts\/po_/.test(location.hash));
     // in the app
-    const b = await new Client(srv.base).req('GET', '/api/bundle');
-    const post = b.json.posts[0];
+    const b = await new Client(srv.base).bundle();
+    const post = b.posts[0];
     assert.equal(post.title, 'Studio test post');
     assert.deepEqual(post.body, ['The light shines in the darkness.', 'And the darkness has not overcome it.']);
     assert.ok(post.image);
@@ -94,13 +94,13 @@ describe('creator dashboard', () => {
     await clearToast(page);
     await page.click('[data-editor] button[type=submit]');
     await toast(page, /Saved/);
-    assert.equal((await new Client(srv.base).req('GET', '/api/bundle')).json.posts[0].title, 'Studio test post (edited)');
+    assert.equal((await new Client(srv.base).bundle()).posts[0].title, 'Studio test post (edited)');
     // schedule into the future → disappears from the app until then
     await page.fill('#ed-pub', '2030-01-01T09:00');
     await clearToast(page);
     await page.click('[data-editor] button[type=submit]');
     await toast(page, /Saved/);
-    assert.notEqual((await new Client(srv.base).req('GET', '/api/bundle')).json.posts[0].title, 'Studio test post (edited)');
+    assert.notEqual((await new Client(srv.base).bundle()).posts[0].title, 'Studio test post (edited)');
     await page.goto(STUDIO() + '#/c/posts');
     await page.waitForSelector('.irow .pill.scheduled', { timeout: 5000 }).catch(async (e) => { await shot(page, 'FAIL-studio-scheduled'); throw e; });
     assert.deepEqual(mon.take(), []);
@@ -127,7 +127,7 @@ describe('creator dashboard', () => {
     await clearToast(page);
     await page.click('[data-editor] button[type=submit]');
     await toast(page, /created/);
-    const alb = (await new Client(srv.base).req('GET', '/api/bundle')).json.albums[0];
+    const alb = (await new Client(srv.base).bundle()).albums[0];
     assert.equal(alb.title, 'Studio Sessions');
     assert.deepEqual(alb.tracks.map((t: { title: string }) => t.title), ['Evening Hymn', 'Morning Praise']);
     assert.ok(alb.tracks[1].audio && alb.tracks[1].duration === 3);
@@ -148,7 +148,7 @@ describe('creator dashboard', () => {
 
   test('testimony moderation: approve from the list', async () => {
     const m = new Client(srv.base); await m.signUp('Esther F.');
-    await m.req('POST', '/api/testimonies', { title: 'Exam passed', body: 'I asked for prayer in the chat before my exam. I passed with distinction.' });
+    await m.rpcOk('submit_testimony', { p_title: 'Exam passed', p_body: 'I asked for prayer in the chat before my exam. I passed with distinction.' });
     const { ctx, page, mon } = await newPage(browser, 'desktop', srv.base);
     await login(page);
     await page.waitForSelector('a.attn');
@@ -159,7 +159,7 @@ describe('creator dashboard', () => {
     await page.click('.irow:has-text("Exam passed") [data-to="published"]');
     await toast(page, /Published/);
     await page.waitForSelector('[data-pending][hidden]', { state: 'attached' });
-    assert.ok((await m.req('GET', '/api/bundle')).json.testimonies.some((t: { title: string }) => t.title === 'Exam passed'));
+    assert.ok((await m.bundle()).testimonies.some((t: { title: string }) => t.title === 'Exam passed'));
     assert.deepEqual(mon.take(), []);
     await ctx.close();
   });
@@ -221,8 +221,8 @@ describe('creator dashboard', () => {
 
   test('settings, comments moderation, members block, team', async () => {
     const m = new Client(srv.base); await m.signUp('Loud Larry');
-    const post = (await m.req('GET', '/api/bundle')).json.posts[0];
-    await m.req('POST', '/api/comments', { target: post.id, body: 'Spam spam spam' });
+    const post = (await m.bundle()).posts[0];
+    await m.rpcOk('post_comment', { p_target: post.id, p_body: 'Spam spam spam' });
     const { ctx, page, mon } = await newPage(browser, 'desktop', srv.base);
     await login(page);
     await page.goto(STUDIO() + '#/settings');
@@ -231,7 +231,7 @@ describe('creator dashboard', () => {
     await clearToast(page);
     await page.click('[data-settings] button[type=submit]');
     await toast(page, /Settings saved/);
-    assert.equal((await m.req('GET', '/api/bundle')).json.settings.tvName, 'Transfiguration TV+');
+    assert.equal((await m.bundle()).settings.tvName, 'Transfiguration TV+');
     await page.goto(STUDIO() + '#/comments');
     await page.fill('[data-q]', 'spam');
     await page.waitForSelector('.crow:has-text("Spam spam spam")');
@@ -244,17 +244,59 @@ describe('creator dashboard', () => {
     await clearToast(page);
     await page.click('dialog.dlg button[value=ok]');
     await toast(page, /blocked/);
-    assert.equal((await m.req('POST', '/api/comments', { target: post.id, body: 'again' })).status, 403);
+    assert.equal((await m.rpc('post_comment', { p_target: post.id, p_body: 'again' })).status, 403);
+    await new Client(srv.base).signUpEmail('paul@church.org', 'pauls-own-password'); // Paul creates his account first
     await page.goto(STUDIO() + '#/team');
     await page.fill('[data-addadmin] [name=name]', 'Deacon Paul');
     await page.fill('[data-addadmin] [name=email]', 'paul@church.org');
-    await page.fill('[data-addadmin] [name=password]', 'temporary-pass-1');
     await clearToast(page);
     await page.click('[data-addadmin] button');
     await toast(page, /Access granted/);
     await page.waitForSelector('td:has-text("Deacon Paul")');
     assert.deepEqual(mon.take(), []);
     await ctx.close();
+  });
+
+  test('new account without access sees "ask the owner"; first-run import of starter content', async () => {
+    // someone creates an account on a dashboard that already has an owner
+    const { ctx, page, mon } = await newPage(browser, 'desktop', srv.base);
+    await page.goto(STUDIO());
+    await page.click('[data-loginmode="create"]');
+    await page.fill('[name=name]', 'New Volunteer');
+    await page.fill('[name=email]', 'volunteer@church.org');
+    await page.fill('[name=password]', 'volunteer-password');
+    await page.click('#loginForm button[type=submit]');
+    await page.waitForSelector('[data-noaccess]:has-text("Almost there")');
+    await page.click('[data-noaccess] [data-logout]');
+    await page.waitForSelector('#loginForm');
+    assert.deepEqual(mon.take(), []);
+    await ctx.close();
+    // a brand-new project: the first account claims ownership, then imports the starter content
+    const fresh = await startTestServer({ claimAdmin: false });
+    try {
+      const f = await newPage(browser, 'desktop', fresh.base);
+      await f.page.goto(fresh.base + '/admin/');
+      await f.page.click('[data-loginmode="create"]');
+      await f.page.fill('[name=name]', 'Pastor Ruth');
+      await f.page.fill('[name=email]', 'ruth@church.org');
+      await f.page.fill('[name=password]', 'a-long-password');
+      await f.page.click('#loginForm button[type=submit]');
+      await f.page.waitForSelector('[data-noaccess]:has-text("Set up the dashboard")');
+      await f.page.click('[data-claim]');
+      await f.page.waitForSelector('[data-starter] [data-import]');
+      assert.match((await f.page.textContent('.who'))!, /Pastor Ruth/);
+      await shot(f.page, 'studio-empty-import');
+      await f.page.click('[data-import]');
+      await f.page.waitForFunction(() => /Imported \d+ items/.test(document.querySelector('#toast')?.textContent || ''), null, { timeout: 30000 });
+      await f.page.waitForSelector('.stats');
+      const b = await new Client(fresh.base).bundle();
+      assert.equal(b.posts.length, 6);
+      assert.equal(b.broadcasts.length, 3);
+      assert.ok(b.settings.logo, 'logo set');
+      assert.equal((await fetch(`${fresh.base}/storage/v1/object/public/media/${b.broadcasts[0].video}`, { method: 'HEAD' })).status, 200, 'videos uploaded');
+      assert.deepEqual(f.mon.take(), []);
+      await f.ctx.close();
+    } finally { await fresh.close(); }
   });
 
   test('works on a phone: menu drawer, list and editor fit the screen', async () => {

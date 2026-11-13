@@ -1,17 +1,18 @@
 import { $, $$, html, ic, setHTML, must, fmt, parseD } from './lib.js';
-import { api, ApiError, cachedBundle, fetchBundle, shareUrl, type Bundle, type Live } from './api.js';
+import { ApiError, cachedBundle, fetchBundle, shareUrl, mediaUrl, myAmens, toggleAmen as apiToggleAmen, postChat, supa, type Bundle, type Live } from './api.js';
 import { D, S, hydrate, save, STORAGE_KEYS, type Tab, type Channel } from './store.js';
 import { getItem, hideSplash, loadStorage, onAppUrlOpen, onResume, scheduleReminder, cancelReminder, setItem, setStatusBar, share, tap, isNative, openExternal } from './native.js';
 import { closeAllPages, closeDrawer, closeLightbox, closeSheet, currentSheet, enableEdgeSwipe, focusTrapKeys, handleBack, initBack, openDrawer, openSheet, pageDepth, popPage, toast, topPage } from './ui.js';
 import { CH, chav, logo, pic, renderChannel, renderEvents, renderFeed, renderHome, renderLibrary, renderTV, songs, trackRow, tvCurrent, byId, amenCount, evRow } from './views.js';
 import { armIdle, chatPane, leaveTV, miniPlayer, mountTV, onLiveChange, onPlayerChange, pauseTV, playSong, renderChat, seekMusic, setViewers, skip, startChat, stopChat, togglePlay, tvFullscreen, tvMute, tvSeek, tvToggle, player } from './media.js';
-import { PAGES, SHEETS, pageHooks, bumpFont, cancelReply, deleteComment, doSearch, goChapter, icsUrl, isDark, loadComments, openPage, openPdf, openSignIn, pickVideo, rerenderTop, setWriteTab, signOut, signedInHooks, startReply, submitComment, submitSignIn, submitTestimony } from './pages.js';
+import { PAGES, SHEETS, pageHooks, bumpFont, cancelReply, deleteComment, doSearch, goChapter, addToCalendar, isDark, loadComments, openPage, openPdf, openSignIn, pickVideo, rerenderTop, setWriteTab, signOut, signedInHooks, startReply, submitComment, submitSignIn, submitTestimony } from './pages.js';
 
 /* =========================================================
    BOOT
    ========================================================= */
 async function boot() {
   await loadStorage(STORAGE_KEYS);
+  supa.restore(); // the client was created before device storage finished loading
   hydrate();
   applyTheme(getItem('pko.theme') !== 'light');
   const cached = cachedBundle();
@@ -37,7 +38,7 @@ function showFatal() {
 /* ---------- splash ---------- */
 function splash(): Promise<void> {
   const logoImg = must<HTMLImageElement>('#spLogo');
-  const logoSrc = S.data?.settings.logo ? `${(window as unknown as { PKO_CONFIG?: { apiBase?: string } }).PKO_CONFIG?.apiBase || ''}/media/${S.data.settings.logo}` : 'icons/logo.webp';
+  const logoSrc = S.data?.settings.logo ? mediaUrl(S.data.settings.logo) : 'icons/logo.webp';
   logoImg.src = logoSrc;
   const sh = must('#spShine');
   sh.style.webkitMaskImage = sh.style.maskImage = `url(${logoSrc})`;
@@ -201,7 +202,6 @@ function go(tab: Tab, chan: Channel = null, opts: { lib?: string; keepScroll?: b
     // so "we're live" / "service ended" arrives instantly.
     startChat();
   }
-  if (tab === 'home' && !chan && D().live.onAir) api<{ viewers: number }>('/api/live').then((r) => setViewers(r.viewers)).catch(() => {});
 }
 const rerenderView = () => { const m = must('#main'); const st = m.scrollTop; const v = S.chan ? renderChannel(S.chan) : ({ home: renderHome, tv: renderTV, library: renderLibrary, events: renderEvents })[S.tab](); setHTML(m.firstElementChild!, v); m.scrollTop = st; };
 
@@ -253,8 +253,8 @@ function showOffline() {
 }
 async function syncAmens() {
   try {
-    const r = await api<{ targets: string[] }>('/api/amens/mine');
-    S.amen = Object.fromEntries(r.targets.map((t) => [t, true]));
+    const targets = await myAmens();
+    S.amen = Object.fromEntries(targets.map((t) => [t, true]));
     save.amen();
   } catch { /* keep local copy */ }
 }
@@ -329,7 +329,7 @@ async function toggleAmen(id: string, btns: HTMLElement[]) {
   paintAmen(id, btns);
   if (want) { tap(); toast('Amen'); }
   try {
-    const r = await api<{ on: boolean; count: number }>('/api/amens', { method: 'POST', body: { target: id, on: want } });
+    const r = await apiToggleAmen(id, want);
     S.amen[id] = r.on; counts[id] = r.count;
   } catch (e) {
     S.amen[id] = !want; counts[id] = Math.max(0, (counts[id] || 0) + (want ? -1 : 1));
@@ -455,7 +455,7 @@ document.addEventListener('click', (e) => {
   if (d.fs !== undefined) { e.stopPropagation(); tvFullscreen(); return; }
   if (d.player !== undefined) { armIdle(); return; }
   if (d.remind) { e.stopPropagation(); toggleReminder(d.remind, t); return; }
-  if (d.ics) { openExternal(icsUrl(d.ics)); return; }
+  if (d.ics) { addToCalendar(d.ics); return; }
   if (d.pdf) { openPdf(d.pdf); return; }
   // account
   if (d.signin !== undefined) { openSignIn(d.signin || 'profile'); return; }
@@ -517,7 +517,7 @@ document.addEventListener('submit', async (e) => {
     const body = i.value.trim();
     if (!body) return;
     i.value = '';
-    try { await api('/api/live/chat', { method: 'POST', body: { body } }); }
+    try { await postChat(body); }
     catch (err) {
       i.value = body;
       if (err instanceof ApiError && err.status === 401) { S.member = null; save.member(); openSignIn('chat'); }
@@ -590,6 +590,6 @@ if ('serviceWorker' in navigator && !isNative() && location.protocol === 'https:
 }
 
 // Expose a tiny hook for automated UI tests.
-(window as unknown as { __pko: unknown }).__pko = { S, go, popPage, evRow };
+(window as unknown as { __pko: unknown }).__pko = { S, go, popPage, evRow, supa };
 
 boot().catch((e) => { console.error(e); showFatal(); });

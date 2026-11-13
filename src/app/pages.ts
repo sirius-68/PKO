@@ -1,10 +1,11 @@
 import { $, $$, html, raw, ic, art, avi, fmt, mmss, ago, when, readMins, parseD, MONTHS, DOW, setHTML, type SafeHTML } from './lib.js';
-import { api, ApiError, API_BASE, mediaUrl, upload, type Comment, type Member } from './api.js';
+void supa;
+import { ApiError, mediaUrl, getComments, postComment, deleteComment as apiDeleteComment, getChapter, submitTestimony as apiSubmitTestimony, uploadTestimonyVideo, signInMember, signOutMember, supa, type Comment } from './api.js';
 import { D, S, save } from './store.js';
 import { closeSheet, openSheet, popPage, pushPage, refreshPage, setBusy, toast, topPage, type PageDef } from './ui.js';
 import { acts, amenCount, byId, chav, commentCount, cover, leaderPfp, logo, look, pic, songs, trackRow, bookProgress, videoSrc } from './views.js';
 import { currentSong, player } from './media.js';
-import { openExternal, setItem } from './native.js';
+import { openExternal, isNative } from './native.js';
 
 const phead = (title: SafeHTML | string = '', over = false, right: SafeHTML | string = ''): SafeHTML =>
   html`<div class="phead ${over ? 'over' : ''}"><button class="ibtn" data-back aria-label="Back">${ic('back')}</button><span class="t">${title}</span>${right || raw('<span style="width:40px"></span>')}</div>`;
@@ -43,8 +44,8 @@ function paintComments(target: string) {
 export async function loadComments(target: string): Promise<void> {
   if (commentCache.has(target)) paintComments(target);
   try {
-    const r = await api<{ comments: Comment[] }>(`/api/comments?target=${encodeURIComponent(target)}`);
-    commentCache.set(target, r.comments);
+    const list = await getComments(target);
+    commentCache.set(target, list);
     paintComments(target);
   } catch (e) {
     const box = $(`[data-comments="${target}"]`);
@@ -73,9 +74,9 @@ export async function submitComment(form: HTMLFormElement): Promise<void> {
   const btn = $<HTMLButtonElement>('button[aria-label="Post comment"]', form);
   setBusy(btn, true);
   try {
-    const r = await api<{ comment: Comment }>('/api/comments', { method: 'POST', body: { target, body, parentId: replyTo?.id } });
+    const c = await postComment(target, body, replyTo?.id);
     const list = commentCache.get(target) || [];
-    list.push(r.comment);
+    list.push(c);
     commentCache.set(target, list);
     input.value = '';
     cancelReply();
@@ -92,7 +93,7 @@ export async function deleteComment(id: string): Promise<void> {
   const box = page ? $<HTMLElement>('[data-comments]', page) : null;
   const target = box?.dataset.comments;
   try {
-    await api(`/api/comments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await apiDeleteComment(id);
     if (target) { commentCache.set(target, (commentCache.get(target) || []).filter((c) => c.id !== id && c.parentId !== id)); paintComments(target); updateCommentPills(target); }
     toast('Comment deleted');
   } catch (e) { toast((e as Error).message, 'err'); }
@@ -264,7 +265,7 @@ let readTimer: number | undefined;
 async function loadChapter(el: HTMLElement, bookId: string, chId: string, idx: number, total: number, resumePct: number) {
   const body = $('[data-chbody]', el)!;
   try {
-    const ch = await api<{ body: string[] }>(`/api/books/${encodeURIComponent(bookId)}/chapters/${encodeURIComponent(chId)}`);
+    const ch = await getChapter(bookId, chId);
     setHTML(body, html`${ch.body.map((p) => html`<p>${p}</p>`)}`);
     if (resumePct > 0) requestAnimationFrame(() => { el.scrollTop = resumePct * (el.scrollHeight - el.clientHeight); });
   } catch (e) {
@@ -362,9 +363,9 @@ export async function submitTestimony(form: HTMLFormElement): Promise<void> {
     if (wantsVideo && pendingVideo) {
       const bar = $('.upbar', form)!; bar.hidden = false;
       const i = $('i', bar)!;
-      video = (await upload('/api/uploads', pendingVideo, (p) => { i.style.width = Math.round(p * 100) + '%'; })).id;
+      video = await uploadTestimonyVideo(pendingVideo, (p) => { i.style.width = Math.round(p * 100) + '%'; });
     }
-    await api('/api/testimonies', { method: 'POST', body: { title, body, name: fd.get('name'), place: fd.get('place'), video } });
+    await apiSubmitTestimony({ title, body, name: String(fd.get('name') || ''), place: String(fd.get('place') || ''), video });
     pendingVideo = null;
     popPage();
     toast('Thank you! Your testimony was sent for review.');
@@ -403,11 +404,10 @@ export async function submitSignIn(form: HTMLFormElement): Promise<void> {
   const btn = $<HTMLButtonElement>('button[type=submit]', form);
   setBusy(btn, true);
   try {
-    const r = await api<{ token: string; member: Member }>('/api/members', { method: 'POST', body: { name: fd.get('name'), phone: fd.get('phone') } });
-    setItem('pko.token', r.token);
-    S.member = r.member; save.member();
+    const member = await signInMember(String(fd.get('name') || ''), String(fd.get('phone') || ''));
+    S.member = member; save.member();
     closeSheet();
-    toast(`Welcome, ${r.member.name.split(' ')[0]}!`);
+    toast(`Welcome, ${member.name.split(' ')[0]}!`);
     signedInHooks.forEach((h) => h(afterSignIn));
   } catch (e) {
     err.hidden = false; err.textContent = (e as Error).message;
@@ -415,8 +415,7 @@ export async function submitSignIn(form: HTMLFormElement): Promise<void> {
 }
 export const signedInHooks: ((reason: string | null) => void)[] = [];
 export async function signOut(): Promise<void> {
-  try { await api('/api/me/session', { method: 'DELETE' }); } catch { /* offline: still clear locally */ }
-  setItem('pko.token', null);
+  await signOutMember().catch(() => {});
   S.member = null; save.member();
   closeSheet();
   toast('Signed out');
@@ -476,5 +475,29 @@ export const SHEETS: Record<string, (arg: string) => SafeHTML | null> = {
   },
 };
 
-export function icsUrl(id: string): string { return `${API_BASE || location.origin}/api/events/${encodeURIComponent(id)}.ics`; }
+/** "Add to calendar": an .ics file on the web, Google Calendar from the native app. */
+export function addToCalendar(id: string): void {
+  const e = byId(D().events, id);
+  if (!e) return;
+  const d = e.date.replace(/-/g, '');
+  const times = [...e.time.matchAll(/(\d{1,2}):(\d{2})/g)].map((m) => m[1].padStart(2, '0') + m[2] + '00');
+  const start = times[0] ? `${d}T${times[0]}` : d;
+  const endDay = times[1] && times[1] < times[0] ? (() => { const x = parseD(e.date); x.setDate(x.getDate() + 1); return `${x.getFullYear()}${String(x.getMonth() + 1).padStart(2, '0')}${String(x.getDate()).padStart(2, '0')}`; })() : d;
+  const end = times[1] ? `${endDay}T${times[1]}` : times[0] ? `${d}T${String(Math.min(23, Number(times[0].slice(0, 2)) + 2)).padStart(2, '0')}${times[0].slice(2)}` : d;
+  if (isNative()) {
+    const q = new URLSearchParams({ action: 'TEMPLATE', text: e.title, dates: `${start}/${end}`, details: e.description, location: e.place });
+    openExternal(`https://calendar.google.com/calendar/render?${q}`);
+    return;
+  }
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', `PRODID:-//${esc(D().settings.appName)}//EN`, 'BEGIN:VEVENT', `UID:${e.id}@pko`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`, times[0] ? `DTSTART:${start}` : `DTSTART;VALUE=DATE:${d}`, times[0] ? `DTEND:${end}` : '',
+    `SUMMARY:${esc(e.title)}`, `LOCATION:${esc(e.place)}`, `DESCRIPTION:${esc(e.description)}`,
+    'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', `DESCRIPTION:${esc(e.title)}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.download = `${e.title.replace(/[^\w -]/g, '').trim() || 'event'}.ics`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
 export { videoSrc, amenCount };

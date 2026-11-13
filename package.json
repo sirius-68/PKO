@@ -2,21 +2,22 @@
   "name": "prophet-kevin-online",
   "version": "1.0.0",
   "private": true,
-  "description": "Prophet Kevin Online — iOS/Android member app (Capacitor), creator dashboard and API for the Apostolic Gospel Mission.",
+  "description": "Prophet Kevin Online \u2014 Android/iOS member app (Capacitor), creator dashboard, on Supabase.",
   "type": "module",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.app.json && tsc -p tsconfig.admin.json",
-    "start": "node server/src/index.ts",
-    "dev": "npm run build && node --watch-path=server/src server/src/index.ts",
-    "watch:web": "tsc -p tsconfig.app.json --watch & tsc -p tsconfig.admin.json --watch",
-    "typecheck": "npm run build && tsc -p tsconfig.server.json",
-    "test": "npm run build && node --test --test-concurrency=1 tests/api/api.test.ts tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
-    "test:api": "node --test tests/api/api.test.ts",
+    "config": "node scripts/write-config.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 tests/backend.test.ts tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
+    "test:backend": "node --test tests/backend.test.ts",
     "test:e2e": "npm run build && node --test --test-concurrency=1 tests/e2e/app.e2e.ts tests/e2e/admin.e2e.ts",
+    "dev": "npm run build && node --no-warnings scripts/dev.ts",
     "native:sync": "npm run build && node scripts/native-sync.mjs",
-    "native:ios": "npm run native:sync && npx cap open ios",
-    "native:android": "npm run native:sync && npx cap open android"
+    "android:apk": "npm run native:sync && cd android && ./gradlew assembleDebug",
+    "native:android": "npm run native:sync && npx cap open android",
+    "native:ios": "npm run native:sync && npx cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

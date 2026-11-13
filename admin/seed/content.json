@@ -1,0 +1,949 @@
+{
+ "note": "Starter content from the original prototype. Imported from the dashboard Overview page.",
+ "media": [
+  {
+   "file": "f_anoint.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "f_crowd1.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "f_crowd2.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "f_douala.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "f_heaven.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "f_rock.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "logo.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_car.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_dubai.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_navy1.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_navy2.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_pray.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_preach.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_sing.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_teal.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "p_white.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "v_anoint.mp4",
+   "mime": "video/mp4"
+  },
+  {
+   "file": "v_douala.mp4",
+   "mime": "video/mp4"
+  },
+  {
+   "file": "v_heaven.mp4",
+   "mime": "video/mp4"
+  },
+  {
+   "file": "v_rock.mp4",
+   "mime": "video/mp4"
+  },
+  {
+   "file": "w_green.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "w_redcar.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "w_redseat.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "w_redwalk.webp",
+   "mime": "image/webp"
+  },
+  {
+   "file": "w_yellow.webp",
+   "mime": "image/webp"
+  }
+ ],
+ "settings": {
+  "appName": "Prophet Kevin Online",
+  "ministry": "Apostolic Gospel Mission",
+  "tvName": "Transfiguration TV",
+  "recordsName": "Transfiguration Records",
+  "leader": "Prophet Kevin",
+  "aboutText": "The ministry of Prophet Kevin. Home of Transfiguration TV and Transfiguration Records.",
+  "aboutVerse": "All thy works shall praise thee, O LORD; and thy saints shall bless thee. They shall speak of the glory of thy kingdom, and talk of thy power; to make known to the sons of men his mighty acts, and the glorious majesty of his kingdom.",
+  "aboutVerseRef": "Psalm 145:10–12 (KJV)",
+  "logo": "logo.webp",
+  "leaderPhoto": "p_white.webp"
+ },
+ "live": {
+  "onAir": true,
+  "title": "The Anointing of Jesus",
+  "ref": "Luke 4:14-21",
+  "video": "v_anoint.mp4",
+  "url": null,
+  "poster": "f_anoint.webp"
+ },
+ "items": [
+  {
+   "collection": "posts",
+   "hoursAgo": 6,
+   "data": {
+    "title": "Light that does not flicker",
+    "flair": "Morning Word",
+    "verse": "And was transfigured before them: and his face did shine as the sun, and his raiment was white as the light.",
+    "ref": "Matthew 17:2",
+    "body": [
+     "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+     "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+     "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+     "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me."
+    ],
+    "image": "p_teal.webp",
+    "imagePos": "center 30%"
+   }
+  },
+  {
+   "collection": "posts",
+   "hoursAgo": 26,
+   "data": {
+    "title": "Six days later",
+    "flair": "Teaching",
+    "verse": "And after six days Jesus taketh Peter, James, and John his brother, and bringeth them up into an high mountain apart.",
+    "ref": "Matthew 17:1",
+    "body": [
+     "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+     "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+    ],
+    "image": "p_navy1.webp",
+    "imagePos": "center 25%"
+   }
+  },
+  {
+   "collection": "posts",
+   "hoursAgo": 168,
+   "data": {
+    "title": "Staying on the mountain is not the assignment",
+    "flair": "Teaching",
+    "verse": "Lord, it is good for us to be here: if thou wilt, let us make here three tabernacles.",
+    "ref": "Matthew 17:4",
+    "body": [
+     "Peter wanted to build tents and stay. Who can blame him? But the mountain was a meeting place, not a dwelling place. The boy who needed deliverance was at the bottom of the hill.",
+     "Every encounter with God comes with a descent. You are lifted so that you can carry something back down."
+    ],
+    "image": "p_dubai.webp",
+    "imagePos": "center 30%"
+   }
+  },
+  {
+   "collection": "posts",
+   "hoursAgo": 264,
+   "data": {
+    "title": "Hear ye him",
+    "flair": "Prophetic",
+    "verse": "This is my beloved Son, in whom I am well pleased; hear ye him.",
+    "ref": "Matthew 17:5",
+    "body": [
+     "When the cloud came, the instruction was simple: hear Him. Not Moses first, not Elijah first, not our plans first. Him.",
+     "This season, the Lord is calling His people back to listening. Before you speak to the situation, let Him speak to you."
+    ],
+    "image": "p_white.webp",
+    "imagePos": "center 20%"
+   }
+  },
+  {
+   "collection": "posts",
+   "hoursAgo": 312,
+   "data": {
+    "title": "Jesus only",
+    "flair": "Morning Word",
+    "verse": "And when they had lifted up their eyes, they saw no man, save Jesus only.",
+    "ref": "Matthew 17:8",
+    "body": [
+     "When the vision ended, the disciples were not left empty. They were left with Jesus. When the lights of the service go off and the music stops, He remains.",
+     "Lift your eyes today and look past every other voice. What remains is enough."
+    ],
+    "image": "p_pray.webp",
+    "imagePos": "center 20%"
+   }
+  },
+  {
+   "collection": "posts",
+   "hoursAgo": 408,
+   "data": {
+    "title": "Arise, shine",
+    "flair": "Prophetic",
+    "verse": "Arise, shine; for thy light is come, and the glory of the LORD is risen upon thee.",
+    "ref": "Isaiah 60:1",
+    "body": [
+     "Notice the order: the light comes first, then the command to shine. God never asks you to produce what He has not first provided.",
+     "Your part is to arise. Get up from the place of discouragement and let what He put in you be seen."
+    ],
+    "image": "p_sing.webp",
+    "imagePos": "center 35%"
+   }
+  },
+  {
+   "collection": "broadcasts",
+   "hoursAgo": 480,
+   "data": {
+    "title": "Douala Ndogbong crusade",
+    "ref": "Hebrews 9:19",
+    "category": "Crusades",
+    "video": "v_douala.mp4",
+    "url": null,
+    "poster": "f_douala.webp"
+   }
+  },
+  {
+   "collection": "broadcasts",
+   "hoursAgo": 168,
+   "data": {
+    "title": "Heaven’s Gate: prophetic ministration",
+    "ref": "Ministration",
+    "category": "Ministration",
+    "video": "v_heaven.mp4",
+    "url": null,
+    "poster": "f_heaven.webp"
+   }
+  },
+  {
+   "collection": "broadcasts",
+   "hoursAgo": 96,
+   "data": {
+    "title": "Christ the Rock",
+    "ref": "1 Corinthians 10:3-4",
+    "category": "Teachings",
+    "video": "v_rock.mp4",
+    "url": null,
+    "poster": "f_rock.webp"
+   }
+  },
+  {
+   "collection": "books",
+   "hoursAgo": 0,
+   "data": {
+    "title": "The Mountain of Transfiguration",
+    "description": "A walk up the mountain with Peter, James and John, and what it means for believers today to be changed from glory to glory.",
+    "year": 2024,
+    "pages": 248,
+    "image": "p_dubai.webp",
+    "imagePos": "center 30%",
+    "pdf": null,
+    "chapters": [
+     {
+      "title": "Introduction",
+      "body": [
+       "A walk up the mountain with Peter, James and John, and what it means for believers today to be changed from glory to glory.",
+       "This sample chapter is starter content. Replace it from the creator dashboard with the book’s real text, or attach the PDF edition."
+      ]
+     },
+     {
+      "title": "The light that came from within",
+      "body": [
+       "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+       "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+       "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+       "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me.",
+       "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+       "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "collection": "books",
+   "hoursAgo": 0,
+   "data": {
+    "title": "Garments of Light",
+    "description": "On holiness, identity and the righteousness God clothes His children with.",
+    "year": 2023,
+    "pages": 186,
+    "image": "p_white.webp",
+    "imagePos": "center 30%",
+    "pdf": null,
+    "chapters": [
+     {
+      "title": "Introduction",
+      "body": [
+       "On holiness, identity and the righteousness God clothes His children with.",
+       "This sample chapter is starter content. Replace it from the creator dashboard with the book’s real text, or attach the PDF edition."
+      ]
+     },
+     {
+      "title": "The light that came from within",
+      "body": [
+       "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+       "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+       "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+       "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me.",
+       "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+       "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "collection": "books",
+   "hoursAgo": 0,
+   "data": {
+    "title": "A Voice from the Cloud",
+    "description": "Learning to hear God clearly in a noisy season, with prayer exercises at the end of every chapter.",
+    "year": 2022,
+    "pages": 204,
+    "image": "p_teal.webp",
+    "imagePos": "42% center",
+    "pdf": null,
+    "chapters": [
+     {
+      "title": "Introduction",
+      "body": [
+       "Learning to hear God clearly in a noisy season, with prayer exercises at the end of every chapter.",
+       "This sample chapter is starter content. Replace it from the creator dashboard with the book’s real text, or attach the PDF edition."
+      ]
+     },
+     {
+      "title": "The light that came from within",
+      "body": [
+       "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+       "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+       "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+       "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me.",
+       "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+       "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "collection": "books",
+   "hoursAgo": 0,
+   "data": {
+    "title": "The Prophetic Prayer Manual",
+    "description": "Thirty days of guided prayer, scripture declarations and journal prompts.",
+    "year": 2025,
+    "pages": 312,
+    "image": "p_pray.webp",
+    "imagePos": "center 25%",
+    "pdf": null,
+    "chapters": [
+     {
+      "title": "Introduction",
+      "body": [
+       "Thirty days of guided prayer, scripture declarations and journal prompts.",
+       "This sample chapter is starter content. Replace it from the creator dashboard with the book’s real text, or attach the PDF edition."
+      ]
+     },
+     {
+      "title": "The light that came from within",
+      "body": [
+       "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+       "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+       "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+       "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me.",
+       "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+       "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "collection": "books",
+   "hoursAgo": 0,
+   "data": {
+    "title": "Seasons of Glory",
+    "description": "Why God works in seasons, and how to stay faithful in each one.",
+    "year": 2021,
+    "pages": 172,
+    "image": "p_navy2.webp",
+    "imagePos": "center 25%",
+    "pdf": null,
+    "chapters": [
+     {
+      "title": "Introduction",
+      "body": [
+       "Why God works in seasons, and how to stay faithful in each one.",
+       "This sample chapter is starter content. Replace it from the creator dashboard with the book’s real text, or attach the PDF edition."
+      ]
+     },
+     {
+      "title": "The light that came from within",
+      "body": [
+       "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+       "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+       "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+       "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me.",
+       "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+       "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "collection": "books",
+   "hoursAgo": 0,
+   "data": {
+    "title": "The Altar Within",
+    "description": "Building a private place of worship that no crowd can give and no crisis can take away.",
+    "year": 2020,
+    "pages": 156,
+    "image": "p_preach.webp",
+    "imagePos": "55% center",
+    "pdf": null,
+    "chapters": [
+     {
+      "title": "Introduction",
+      "body": [
+       "Building a private place of worship that no crowd can give and no crisis can take away.",
+       "This sample chapter is starter content. Replace it from the creator dashboard with the book’s real text, or attach the PDF edition."
+      ]
+     },
+     {
+      "title": "The light that came from within",
+      "body": [
+       "Peter, James and John climbed the mountain expecting another ordinary prayer meeting. What they met was a light that came from the inside out. Jesus did not borrow His glory from the sun; the sun was simply the nearest picture they had for it.",
+       "Many of us live by reflected light. We shine when the week is good, when the bills are paid, when someone speaks well of us. Then a cloud passes and the brightness goes with it. That is borrowed light, and borrowed light always flickers.",
+       "The light God wants to grow in you does not depend on the weather around you. It is kindled in prayer, fed by the Word and protected by obedience. Today, before you check your phone, give the first ten minutes to Him.",
+       "Carry this into your day: I will not live on reflected light. The One who shone on the mountain lives in me.",
+       "Before the mountain there were six days. Six days of walking, of waiting, of ordinary bread and ordinary roads. Scripture does not tell us much about them, and that is the point. Glory is often prepared in days nobody writes about.",
+       "If you are in your six days, do not despise them. God is not late. He is preparing the climb, choosing the company and setting the time."
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "collection": "albums",
+   "hoursAgo": 7200,
+   "data": {
+    "title": "Live at Transfiguration Night",
+    "artist": "Transfiguration Choir (Live)",
+    "year": 2024,
+    "image": "f_crowd2.webp",
+    "imagePos": "center",
+    "tracks": [
+     {
+      "title": "Opening Praise Medley",
+      "audio": null,
+      "duration": 534
+     },
+     {
+      "title": "Worthy Is the Lamb",
+      "audio": null,
+      "duration": 318
+     },
+     {
+      "title": "We Lift Our Eyes",
+      "audio": null,
+      "duration": 287
+     },
+     {
+      "title": "Transfiguration Night",
+      "audio": null,
+      "duration": 402
+     }
+    ]
+   }
+  },
+  {
+   "collection": "albums",
+   "hoursAgo": 2880,
+   "data": {
+    "title": "Midnight Altar",
+    "artist": "Transfiguration Choir",
+    "year": 2025,
+    "image": "p_navy1.webp",
+    "imagePos": "center 30%",
+    "tracks": [
+     {
+      "title": "Midnight Altar",
+      "audio": null,
+      "duration": 412
+     },
+     {
+      "title": "Fire on the Mountain",
+      "audio": null,
+      "duration": 265
+     },
+     {
+      "title": "Arise and Shine",
+      "audio": null,
+      "duration": 247
+     },
+     {
+      "title": "Breathe on Me",
+      "audio": null,
+      "duration": 330
+     },
+     {
+      "title": "Holy Ground",
+      "audio": null,
+      "duration": 296
+     }
+    ]
+   }
+  },
+  {
+   "collection": "albums",
+   "hoursAgo": 72,
+   "data": {
+    "title": "Glory on the Mountain",
+    "artist": "Prophet Kevin & Transfiguration Choir",
+    "year": 2026,
+    "image": "p_sing.webp",
+    "imagePos": "58% center",
+    "tracks": [
+     {
+      "title": "Garments of Light",
+      "audio": null,
+      "duration": 283
+     },
+     {
+      "title": "Glory on the Mountain",
+      "audio": null,
+      "duration": 341
+     },
+     {
+      "title": "Hear Ye Him",
+      "audio": null,
+      "duration": 256
+     },
+     {
+      "title": "Six Days Later",
+      "audio": null,
+      "duration": 219
+     },
+     {
+      "title": "Jesus Only",
+      "audio": null,
+      "duration": 302
+     },
+     {
+      "title": "From Glory to Glory",
+      "audio": null,
+      "duration": 388
+     }
+    ]
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Transfiguration Night",
+    "date": "2026-11-13",
+    "time": "21:00 – 04:00",
+    "place": "Main auditorium and Transfiguration TV",
+    "description": "An all-night service of worship, the Word and prophetic prayer. Come with your prayer points and expectation.",
+    "image": "p_sing.webp",
+    "imagePos": "58% center"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Sunday Encounter Service",
+    "date": "2026-11-15",
+    "time": "09:00 – 12:00",
+    "place": "Main auditorium",
+    "description": "Our weekly gathering. Children’s church runs in the east hall.",
+    "image": "p_navy1.webp",
+    "imagePos": "center 25%"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Midweek Bible Study",
+    "date": "2026-11-18",
+    "time": "18:30 – 20:00",
+    "place": "Fellowship hall and online",
+    "description": "We continue through the Gospel of Matthew. Bring your Bible and a notebook.",
+    "image": "p_pray.webp",
+    "imagePos": "center 25%"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Sunday Encounter Service",
+    "date": "2026-11-22",
+    "time": "09:00 – 12:00",
+    "place": "Main auditorium",
+    "description": "Our weekly gathering. Children’s church runs in the east hall.",
+    "image": "p_navy2.webp",
+    "imagePos": "center 25%"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Prophetic Encounter Conference",
+    "date": "2026-11-26",
+    "time": "Thu 26 – Sat 28 Nov",
+    "place": "Main auditorium",
+    "description": "Three days of teaching, impartation and worship with guest ministers. Registration is free.",
+    "image": "f_crowd2.webp",
+    "imagePos": "center"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Sunday Encounter Service",
+    "date": "2026-11-29",
+    "time": "09:00 – 12:00",
+    "place": "Main auditorium",
+    "description": "Our weekly gathering.",
+    "image": "p_navy1.webp",
+    "imagePos": "center 25%"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Youth Fire Camp",
+    "date": "2026-12-05",
+    "time": "08:00 – 18:00",
+    "place": "Church grounds",
+    "description": "A day of games, worship and the Word for ages 13 to 25.",
+    "image": null,
+    "imagePos": "center"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Carols by Candlelight",
+    "date": "2026-12-20",
+    "time": "18:00 – 20:30",
+    "place": "Main auditorium",
+    "description": "The Transfiguration Choir leads an evening of carols. Bring a friend.",
+    "image": null,
+    "imagePos": "center"
+   }
+  },
+  {
+   "collection": "events",
+   "hoursAgo": 48,
+   "data": {
+    "title": "Crossover Service",
+    "date": "2026-12-31",
+    "time": "21:00 – 01:00",
+    "place": "Main auditorium and Transfiguration TV",
+    "description": "Cross into 2027 in worship and prophetic declarations.",
+    "image": "p_preach.webp",
+    "imagePos": "55% center"
+   }
+  },
+  {
+   "collection": "testimonies",
+   "hoursAgo": 336,
+   "data": {
+    "title": "Our son came home",
+    "name": "The Fon family",
+    "place": "Yaoundé",
+    "quote": "He left home at 17. At 21 he walked back through our door.",
+    "body": [
+     "A family’s story of four years of prayer and one phone call."
+    ],
+    "video": null
+   }
+  },
+  {
+   "collection": "testimonies",
+   "hoursAgo": 168,
+   "data": {
+    "title": "Set free from a habit I hid for ten years",
+    "name": "Brother Samuel T.",
+    "place": "Accra",
+    "quote": "I am writing this so someone else knows freedom is possible.",
+    "body": [
+     "For ten years I hid it from everyone, even my wife. During the midnight prayer line I finally confessed and asked for help.",
+     "It has been four months. I am free, and my home is at peace."
+    ],
+    "video": null
+   }
+  },
+  {
+   "collection": "testimonies",
+   "hoursAgo": 96,
+   "data": {
+    "title": "From closing my shop to opening a second one",
+    "name": "Sister Mirabel A.",
+    "place": "Buea",
+    "quote": "In January I was ready to close. In October I opened a second branch.",
+    "body": [
+     "Mirabel shares how she followed the counsel from the Prophet’s teaching on faithfulness in small things."
+    ],
+    "video": null
+   }
+  },
+  {
+   "collection": "testimonies",
+   "hoursAgo": 48,
+   "data": {
+    "title": "My visa was approved after it was refused twice",
+    "name": "Daniel K.",
+    "place": "London",
+    "quote": "The third application went through in nine days.",
+    "body": [
+     "I had been refused twice and was ready to give up. During Transfiguration Night I wrote my request and brought it to the altar online.",
+     "Nine days after I applied again, it was approved. God changed the outcome."
+    ],
+    "video": null
+   }
+  },
+  {
+   "collection": "testimonies",
+   "hoursAgo": 24,
+   "data": {
+    "title": "Our twins arrived safely",
+    "name": "Emeka & Joy O.",
+    "place": "Lagos",
+    "quote": "After seven years of waiting, we held our twins.",
+    "body": [
+     "We joined the prayer line every Friday for a year. Today we came back to say thank you, holding two babies."
+    ],
+    "video": null
+   }
+  },
+  {
+   "collection": "testimonies",
+   "hoursAgo": 3,
+   "data": {
+    "title": "Healed after three years of back pain",
+    "name": "Grace N.",
+    "place": "Douala",
+    "quote": "I stood up from my seat during the Sunday service without the pain I had carried for three years.",
+    "body": [
+     "For three years I could not sit for more than twenty minutes. Doctors gave me exercises and painkillers, and I did everything they said.",
+     "On Sunday the Prophet prayed for everyone watching who had pain in their back. I put my hand where it hurt and said Amen. When I stood up at the end of the service, the pain was gone.",
+     "I give God all the glory."
+    ],
+    "video": null
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 30,
+   "data": {
+    "image": "f_crowd2.webp",
+    "caption": "Hands raised in praise",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 29,
+   "data": {
+    "image": "w_redseat.webp",
+    "caption": "Front row, crusade night",
+    "album": "Crusade nights"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 28,
+   "data": {
+    "image": "p_navy2.webp",
+    "caption": "Sunday service",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 27,
+   "data": {
+    "image": "w_redwalk.webp",
+    "caption": "Crusade night",
+    "album": "Crusade nights"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 26,
+   "data": {
+    "image": "p_teal.webp",
+    "caption": "Prophet Kevin",
+    "album": "Portraits"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 25,
+   "data": {
+    "image": "w_yellow.webp",
+    "caption": "Standing in worship",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 24,
+   "data": {
+    "image": "p_car.webp",
+    "caption": "Arriving for the night service",
+    "album": "Crusade nights"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 23,
+   "data": {
+    "image": "f_crowd1.webp",
+    "caption": "The congregation in worship",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 22,
+   "data": {
+    "image": "p_white.webp",
+    "caption": "Prophet Kevin",
+    "album": "Portraits"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 21,
+   "data": {
+    "image": "w_redcar.webp",
+    "caption": "Arriving for the crusade",
+    "album": "Crusade nights"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 20,
+   "data": {
+    "image": "p_pray.webp",
+    "caption": "A moment of prayer",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 19,
+   "data": {
+    "image": "p_preach.webp",
+    "caption": "Preaching under the canopy",
+    "album": "Crusade nights"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 18,
+   "data": {
+    "image": "p_dubai.webp",
+    "caption": "Day 2, morning session",
+    "album": "Dubai Prophetic Visitation"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 17,
+   "data": {
+    "image": "w_green.webp",
+    "caption": "Taking notes during the Word",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 16,
+   "data": {
+    "image": "p_sing.webp",
+    "caption": "Worship on the crusade stage",
+    "album": "Crusade nights"
+   }
+  },
+  {
+   "collection": "photos",
+   "hoursAgo": 15,
+   "data": {
+    "image": "p_navy1.webp",
+    "caption": "At the altar, Sunday service",
+    "album": "Services"
+   }
+  },
+  {
+   "collection": "schedule",
+   "hoursAgo": 0,
+   "data": {
+    "time": "12:00",
+    "title": "Midday Word",
+    "subtitle": "15 minutes in the Scriptures"
+   }
+  },
+  {
+   "collection": "schedule",
+   "hoursAgo": 0,
+   "data": {
+    "time": "18:30",
+    "title": "Christ the Rock",
+    "subtitle": "Replay with live chat"
+   }
+  },
+  {
+   "collection": "schedule",
+   "hoursAgo": 0,
+   "data": {
+    "time": "21:00",
+    "title": "Midnight prayer line",
+    "subtitle": "Bring your prayer points"
+   }
+  }
+ ]
+}

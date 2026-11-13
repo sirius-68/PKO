@@ -1,156 +1,107 @@
 # Prophet Kevin Online (PKO)
 
-The Apostolic Gospel Mission's app, rebuilt from the single-file prototype as three parts:
+The Apostolic Gospel Mission's app: a **mobile app** for members, a **creator dashboard** for the media team, and **Supabase** as the backend. There's no server of your own to run.
 
-| Part | What it is | Where |
+```
+ Android / iOS app (Capacitor) ─┐
+ Web app  (GitHub Pages /app)   ├──►  Supabase: Postgres + Auth + Storage + Realtime
+ Dashboard (GitHub Pages /admin)┘        (rules and functions in supabase/migrations)
+```
+
+| Part | What it is | Code |
 |---|---|---|
-| **Member app** | The iOS and Android app (via **Capacitor**), also installable as a web app (PWA). TypeScript, no framework. | `src/app` → built to `app/` |
-| **Creator dashboard** ("PKO Studio") | Where the media team uploads and manages everything shown in the app. | `src/admin` → built to `admin/` |
-| **API server** | Node 22 with built-in SQLite. Content, uploads, live chat, comments, Amens, moderation. **No runtime dependencies.** | `server/` |
+| Member app | Android/iOS via Capacitor, also a web app (PWA). TypeScript, no framework. | `src/app` → `app/` |
+| Creator dashboard | Upload and manage everything in the app; moderation; going live. | `src/admin` → `admin/` |
+| Backend | One SQL migration with tables, row-level security, storage rules and every function the apps call. | `supabase/migrations/` |
+| Supabase client | A small dependency-free client used by both apps: database calls, auth, storage uploads with progress, and live updates. | `src/shared/supa.ts` |
 
-Everything in the prototype that was hard-coded or simulated now runs on real data: content, comments, live chat and viewer counts, Amens, testimony submissions, audio playback, reading progress, reminders and search.
+## Going live (test setup)
 
----
+### 1. Create the Supabase project
+1. Create a project at [supabase.com](https://supabase.com).
+2. Apply the database schema. Either:
+   - open the project's **SQL Editor**, paste `supabase/migrations/20261113000000_init.sql`, and click **Run**; or
+   - use the Supabase CLI: `supabase link` then `supabase db push`.
+3. **Authentication → Sign In / Providers:** turn on **Allow anonymous sign-ins**. Members use this to Amen, comment and chat after entering their name.
+4. **Authentication → URL Configuration:** set **Site URL** to the dashboard address, `https://sirius-68.github.io/PKO/admin/`.
+5. **Project Settings → API:** copy the **Project URL** and the **anon public** key into `supabase.config.json`. Both are public by design. **Never** use the `service_role` key.
 
-## Quick start (local)
+### 2. Publish the dashboard and web app (GitHub Pages)
+1. In the repo, open **Settings → Pages → Source** and choose **GitHub Actions**.
+2. Push to `main`. The *Deploy* workflow publishes:
+   - the dashboard at `https://sirius-68.github.io/PKO/admin/`
+   - the web app at `https://sirius-68.github.io/PKO/app/`
+3. Open the dashboard, choose **Create an account**, then **Become the owner**. The first account owns the dashboard.
+4. On the Overview page, click **Import starter content** to load the original app's posts, books, albums, events, photos and the 4 TV clips.
+5. To add teammates: they create an account first, then you add their email under **Team & password**.
 
-Requires **Node 22.18+**.
+### 3. Get the Android app
+The same *Deploy* workflow builds an APK and attaches it to the **`android-latest` GitHub Release**. It does this whenever `supabase.config.json` is filled in. To install on Android:
 
-```bash
-ADMIN_EMAIL=you@ministry.org ADMIN_PASSWORD='a-long-password' npm start
-```
+1. Download the APK on the phone.
+2. Open it.
+3. Allow installs from that source.
 
-- Member app: http://localhost:8787/app/
-- Creator dashboard: http://localhost:8787/admin/ (sign in with the email/password above)
+This is a test build (debug-signed), for sideloading only. For the Play Store you need a signed release build; see *Store release* below.
 
-On first run the server seeds the starter content from the prototype (posts, books, albums, events, testimonies, photos and the 4 broadcast videos) and creates the dashboard account. Data lives in `server/data/` (`DATA_DIR` to change).
+### Store release (later)
+- **Android:** create an upload keystore, then run `npm run native:sync`. Build a signed AAB in Android Studio (*Build → Generate Signed Bundle*) and upload it to Google Play.
+- **iOS:** on a Mac, run `npm run native:ios`. Then:
+  - set the team and bundle id;
+  - add **Background Modes → Audio** so songs play when the phone locks;
+  - archive and upload to App Store Connect.
+- Change `appId` in `capacitor.config.json` to the id you register.
 
-The compiled browser code (`app/js`, `admin/js`) is committed, so `npm start` works without installing anything. After changing TypeScript in `src/`, run `npm install` once, then `npm run build`.
+## Plan limits to know (Supabase free plan)
 
-## Building the iOS and Android apps
+- **Projects pause after 7 days without activity.** That's fine for testing, but use the Pro plan ($25/month) for the real launch.
+- **Uploads are capped at 50 MB per file.** Long sermon videos need the Pro plan or a streaming link; put HLS/MP4 links in the Live page or a broadcast's "video URL".
+- Supabase's built-in email sender is rate-limited. For more than a few dashboard sign-ups, add your own SMTP.
 
-1. Deploy the server somewhere with **https** (see *Deploying*), e.g. `https://api.yourministry.org`.
-2. Install tooling and create/sync the native projects:
-   ```bash
-   npm install
-   API_URL=https://api.yourministry.org npm run native:sync
-   ```
-   This creates `ios/` and `android/`, generates icons and splash screens from `app/icons/`, and points the bundled app at your API.
-3. Open and run them: `npm run native:ios` (Xcode) or `npm run native:android` (Android Studio).
-4. Before you submit to the stores:
-   - Change `appId` in `capacitor.config.json` (it's currently `org.apostolicgospelmission.pko`) to the bundle id you've registered.
-   - **iOS:** in Xcode, under *Signing & Capabilities*, add **Background Modes → Audio** so songs keep playing when the phone locks.
-   - **Android:** notification permission is requested automatically the first time someone taps "Remind me".
-   - Commit the generated `ios/` and `android/` folders.
+## How the security works
 
-Native features are used when available and fall back to web APIs otherwise:
+- **Reading:** the apps read published content through `get_bundle()` and related functions. Drafts, scheduled posts and the media registry are never exposed.
+- **Writing:** every write goes through a database function that checks who is calling.
+  - **Guests** can only read.
+  - **Members** get an anonymous account plus a name. They can Amen, comment, chat, and submit testimonies, which wait for approval.
+  - **The media team** are email accounts listed in `admins`. Only they can create content, upload or delete files, moderate, and go live.
+- **Storage:** only the media team can upload, replace or delete files. Members may upload a testimony video, and only into their own folder. The bucket refuses SVG/HTML and other unsafe types.
+- **Abuse limits:** rate limits apply to comments, chat, Amens, testimonies and uploads. Blocked members can't post.
+- **Removed chat messages:** a moderator's delete wipes the message text from the database, not just from the screen.
 
-| Feature | How it works |
-|---|---|
-| Hardware back button | Closes lightbox → sheet → drawer → page, then returns to Home, then exits. Also handles the browser back button and iOS edge-swipe. |
-| Share | The native share sheet; copies the link on the web. |
-| Haptics | Light tap when you Amen or save something. |
-| Reminders | Local notifications 1 hour before events and 10 minutes before TV programmes. |
-| Lock-screen and Bluetooth music controls | Media Session API. |
-| Storage | Capacitor Preferences, which survives iOS storage eviction. |
-| Status bar | Follows the dark/light theme. |
-| Screen stays awake | While a video is playing. |
-| PDF books | Open in the in-app browser. |
+## Development and tests
 
-> **Verify on a device:** the app reaches native plugins through `window.Capacitor.Plugins` without a bundler. Each one is feature-detected, so a missing plugin falls back to the web behaviour instead of crashing. Do a quick pass on a real phone (share, back button, reminder, lock-screen audio) the first time you build. I could only test in browser emulation here.
-
-## Creator dashboard
-
-Every content type is defined once in `server/src/schema.ts`. The API validates against it and the dashboard builds its forms from it, so adding a field there adds it everywhere.
-
-- **Content:** blog posts, TV broadcasts, books (with chapters, plus an optional PDF edition), albums (tracks with audio), events, testimonies, gallery photos and the TV schedule.
-- **Uploads:** drag and drop or pick files, with a progress bar. A media library lets you reuse files. Uploading audio fills in the track length automatically. Files are checked by their actual contents, not just their names. SVG and HTML uploads are refused.
-- **Publishing:** publish, save as draft, schedule a future date, reorder books and the schedule, and use "View in app".
-- **Live:** one button to go live or end the service. Set a looping stream file or an HLS/MP4 URL, watch the live chat, post as a moderator and remove messages. Members' apps update instantly.
-- **Moderation:** member testimonies wait in a "pending" queue, with a badge in the menu. You can approve or reject them, remove comments, and block members.
-- **Settings and team:** names, logo, about text and verse. Invite colleagues and change passwords.
-- Works on a phone. The menu becomes a drawer.
-
-## Deploying
-
-The server is a single Node process with no dependencies:
+You can run everything locally without a Supabase account. `supabase/local/` contains a small emulator of the Supabase APIs the apps use: auth, database calls, storage and live updates. It runs on a real Postgres with the **real migration** applied, so the database rules and functions behave exactly as they will in production.
 
 ```bash
-docker build -t pko . && docker run -p 8787:8787 -v pko-data:/data \
-  -e ADMIN_EMAIL=you@ministry.org -e ADMIN_PASSWORD='a-long-password' pko
+npm install                       # TypeScript + Playwright
+npm run dev                       # throwaway DB + emulator; prints app/dashboard URLs
+npm test                          # backend + end-to-end UI tests
 ```
 
-Put it behind HTTPS (Caddy, nginx, a cloud load balancer). Environment variables:
+Both need a local Postgres 16 with trust auth (`PGHOST`, `PGPORT`, `PGUSER`). CI uses a Postgres service container.
 
-| Variable | Default | |
-|---|---|---|
-| `PORT` | `8787` | |
-| `DATA_DIR` | `server/data` | SQLite database and uploaded media. Back this up. |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | – | Creates the first dashboard account if none exists. |
-| `MAX_UPLOAD_MB` | `1024` | Largest file the dashboard accepts. |
-| `MEMBER_UPLOAD_MB` | `300` | Largest testimony video a member can upload. |
-| `CORS_ORIGINS` | `*` | The public API uses bearer tokens, never cookies, so `*` is safe. |
-| `TRUST_PROXY` | `0` | Set to `1` behind a reverse proxy so rate limits see real client IPs. |
-| `SECURE_COOKIES` | on when `NODE_ENV=production` | |
+**Tests (all passing):**
+- **30 backend tests:** what guests and members can and can't do, admin-only functions, storage rules, validation, rate limits, moderation, and live updates over WebSocket.
+- **20 member-app tests:** Chrome on iPhone SE, iPhone 13, Pixel 7, iPad mini and desktop sizes.
+- **9 dashboard tests,** including first-owner setup and the starter-content import.
 
-For a very large audience, put the `/media/` path behind a CDN. For real live streaming, use a streaming provider's HLS URL in the Live page.
-
-## Tests
-
-```bash
-npm test          # everything (needs `npm install` + `npx playwright install chromium`)
-npm run test:api  # API only, no browser needed
-```
-
-**56 tests, all passing.**
-
-- **28 API tests:** validation, auth and CSRF, rate limits, uploads (type sniffing, size limits, range requests, path traversal), scheduling, moderation, Amens, comments and threading, and live chat over Server-Sent Events.
-- **20 member-app tests:** run in Chrome on iPhone SE, iPhone 13, Pixel 7, iPad mini and desktop sizes.
-- **8 dashboard tests.**
-
-The end-to-end tests drive the real UI. They cover onboarding, every tab and channel, Amen/save/share, sign-in, comments (including script injection attempts), live video and two-way chat, off-air switching, music, the book reader, the calendar and reminders, the gallery lightbox, testimony submission → approval, search, theme, back-button handling, deep links, offline start, and every dashboard flow.
-
-A **UI bug monitor** runs during every test. It fails the test on:
-
-- any JS error, server error (5xx) or failed request;
-- a layout audit of every screen: sideways overflow, elements off-screen, broken images, unlabelled buttons and tap targets under 24px.
-
-Screenshots of every screen land in `test-results/screens/`.
-
-### Bugs the tests found and fixed
-
-- The video player's sound and full-screen buttons were 18×18 px, too small to tap reliably.
-- On 320 px phones, the search page was wider than the screen. Separately, focusing a field could scroll the whole app frame sideways with no way back (`overflow: hidden` allows programmatic scroll; now `overflow: clip` plus a guard).
-- The "Add a comment" bar and the reader's progress bar scrolled away with the page instead of staying pinned. The original prototype had this bug too.
-- Album and book cards in a row were vertically misaligned when titles had different lengths.
-- After going off-air, the TV tab stopped listening, so viewers never saw "we're live" again without restarting the app.
-- "Continue reading" didn't appear after closing a book until the Library tab was re-opened.
-- The comment Amen button had no accessible name.
-- Dashboard: the "testimonies waiting for review" link opened an error page. Fast navigation could crash a list redraw. Thumbnail links had no accessible name.
-- Server: the dashboard login limit counted successful sign-ins, so a busy team could lock itself out. Sign-ups were capped at 10/hour per IP, which would block a congregation sharing church Wi-Fi.
+A UI monitor fails a test on any JS error, failed request or server error. A layout audit checks every screen for sideways overflow, off-screen elements, broken images, unlabelled buttons and small tap targets. Screenshots go to `test-results/screens/`.
 
 ## Known limitations / next steps
+- **Member sign-in uses a name only.** The phone number is stored but not verified. Supabase Auth can add SMS one-time codes (Twilio and others) and upgrade these anonymous accounts in place.
+- **HLS live streams** play natively on Android, iOS and Safari. Desktop Chrome and Firefox show a "watch on your phone" message.
+- **Seed content** is the prototype's placeholder copy, and songs show "Soon" until audio is uploaded.
 
-- **Phone sign-in has no SMS verification yet.** Members enter a name, with phone optional. The phone number is stored but is not used as a login, so nobody can take over an account by typing someone's number. Wire an SMS-OTP provider (Twilio, Firebase Auth) into `registerMember` when ready. The prototype's "Continue with Google" button was dropped until OAuth is configured.
-- **HLS live streams** play natively on iOS, Android and Safari. Desktop Chrome and Firefox users get a "watch on your phone" message unless you add hls.js.
-- **Seed content** is the prototype's placeholder copy. The books have sample chapters. Replace it from the dashboard. Songs show "Soon" until audio is uploaded.
-- **Server types:** `npm run typecheck` checks the server TypeScript against `@types/node`. It couldn't be run in the build environment (no package registry access), but the server is exercised end to end by the test suite.
-
-## Project layout
-
+## Layout
 ```
-server/src/
-  index.ts       entry: config, seed, listen
-  app.ts         HTTP server, static hosting, CORS, CSP
-  schema.ts      content types → validation + dashboard forms
-  content.ts     items, settings, live state, public bundle
-  routes/        public.ts (app API), admin.ts (dashboard API)
-  auth.ts        scrypt passwords, sessions, member tokens
-  media.ts       uploads (streamed, sniffed), range serving
-  live.ts        Server-Sent Events: chat, viewers, on-air changes
-  seed.ts        starter content
-src/app/         member app (lib, api, store, native, ui, views, media, pages, main)
-src/admin/       dashboard (lib, form, main)
-app/, admin/     web roots served at /app and /admin (compiled JS in js/)
-tests/           api/, e2e/ (Playwright + UI monitor), helpers
+supabase/migrations/   the backend (schema, RLS, storage policies, RPCs)
+supabase/local/        Supabase emulator + Postgres client for local dev/tests only
+src/app/               member app        → app/js
+src/admin/             dashboard         → admin/js   (backend.ts maps screens → RPCs)
+src/shared/            supa.ts (Supabase client), schema.ts (content types + validation)
+admin/seed/            starter content for "Import starter content"
+scripts/               write-config, native-sync, dev
+tests/                 backend.test.ts, e2e/ (Playwright + UI monitor), helpers
+.github/workflows/     ci.yml (tests), deploy.yml (Pages + Android APK release)
 ```

@@ -1,5 +1,8 @@
-import { $, $$, api, ApiError, bytes, confirmDialog, html, ic, mediaUrl, raw, rel, setHTML, setUnauthorizedHandler, toast, toLocalInput, uploadFile, type Collection, type MediaRow, type Schema, type SafeHTML } from './lib.js';
+import { $, $$, api, ApiError, NotAdminError, bytes, confirmDialog, html, ic, mediaUrl, raw, rel, setHTML, setUnauthorizedHandler, toast, toLocalInput, uploadFile, type Collection, type MediaRow, type Schema, type SafeHTML } from './lib.js';
 import { SchemaForm, thumb } from './form.js';
+import { APP_URL, claimOwner, createAccount, supa } from './backend.js';
+import { importStarterContent } from './seed.js';
+import { validate } from '../shared/schema.js';
 
 interface Admin { id: string; email: string; name: string }
 interface Item { id: string; status: string; publishedAt: string; updatedAt: string; createdAt: string; sort: number; amens?: number; commentCount?: number; memberId?: string | null; [k: string]: unknown }
@@ -7,41 +10,62 @@ interface Item { id: string; status: string; publishedAt: string; updatedAt: str
 let me: Admin | null = null;
 let schema: Schema;
 let currentForm: SchemaForm | null = null;
-let chatES: EventSource | null = null;
+let pendingName = '';
+let liveRoom: ReturnType<ReturnType<typeof supa.realtime>['channel']> | null = null;
 const view = () => $('#view')!;
 
 /* ---------- boot / auth ---------- */
 async function boot() {
   setUnauthorizedHandler(() => { if (me) { me = null; showLogin('Your session ended. Please sign in again.'); } });
+  if (!supa.configured) {
+    setHTML($('#app')!, html`<main class="login"><div class="card"><h1>Not connected</h1><p class="muted">This dashboard isn't linked to a Supabase project yet. Set <code>supabaseUrl</code> and <code>supabaseAnonKey</code> in <code>config.js</code> (the GitHub build does this for you).</p></div></main>`);
+    return;
+  }
   try {
     me = (await api<{ admin: Admin }>('/api/admin/me')).admin;
   } catch { showLogin(); return; }
   await startApp();
 }
-function showLogin(msg = '') {
+function showLogin(msg = '', mode: 'signin' | 'create' = 'signin') {
   stopChat();
   document.body.classList.add('auth');
-  setHTML($('#app')!, html`<main class="login"><form class="card" id="loginForm" novalidate>
-    <img src="/app/icons/logo.webp" alt="" class="login-logo">
-    <h1>Creator dashboard</h1><p class="muted">Sign in to publish to the app.</p>
-    ${msg ? html`<p class="note">${msg}</p>` : ''}
+  const create = mode === 'create';
+  setHTML($('#app')!, html`<main class="login"><form class="card" id="loginForm" data-mode="${mode}" novalidate>
+    <img src="../app/icons/logo.webp" alt="" class="login-logo">
+    <h1>${create ? 'Create your account' : 'Creator dashboard'}</h1><p class="muted">${create ? 'For the media team. The first account becomes the dashboard owner.' : 'Sign in to publish to the app.'}</p>
+    ${msg ? html`<p class="note" role="status">${msg}</p>` : ''}
+    ${create ? html`<label class="fld"><span class="lbl">Your name</span><input class="inp" name="name" autocomplete="name" required></label>` : ''}
     <label class="fld"><span class="lbl">Email</span><input class="inp" name="email" type="email" autocomplete="username" required></label>
-    <label class="fld"><span class="lbl">Password</span><input class="inp" name="password" type="password" autocomplete="current-password" required></label>
+    <label class="fld"><span class="lbl">Password${create ? ' (10+ characters)' : ''}</span><input class="inp" name="password" type="password" autocomplete="${create ? 'new-password' : 'current-password'}" required></label>
     <p class="err" data-loginerr hidden></p>
-    <button class="btn primary block" type="submit">Sign in</button>
+    <button class="btn primary block" type="submit">${create ? 'Create account' : 'Sign in'}</button>
+    <button class="btn ghost block" type="button" data-loginmode="${create ? 'signin' : 'create'}">${create ? 'I already have an account' : 'Create an account'}</button>
   </form></main>`);
-  $<HTMLInputElement>('[name=email]')?.focus();
+  $<HTMLInputElement>(create ? '[name=name]' : '[name=email]')?.focus();
+}
+/** Signed in, but not on the team yet: either claim ownership (first ever) or ask for access. */
+function showNoAccess(hasOwner: boolean, email: string) {
+  document.body.classList.add('auth');
+  setHTML($('#app')!, html`<main class="login"><div class="card" data-noaccess>
+    <img src="../app/icons/logo.webp" alt="" class="login-logo">
+    ${hasOwner
+      ? html`<h1>Almost there</h1><p class="muted">You're signed in as <b>${email}</b>, but you don't have dashboard access yet. Ask the dashboard owner to add this email under <i>Team &amp; password</i>.</p>`
+      : html`<h1>Set up the dashboard</h1><p class="muted">No one owns this dashboard yet. Become the owner as <b>${email}</b>? You can add the rest of the media team afterwards.</p>
+        <label class="fld"><span class="lbl">Your name</span><input class="inp" name="ownername" autocomplete="name" value="${pendingName}"></label>
+        <p class="err" data-claimerr hidden></p>
+        <button class="btn primary block" data-claim>Become the owner</button>`}
+    <button class="btn ghost block" data-logout style="margin-top:10px">Sign out</button></div></main>`);
 }
 async function startApp() {
   document.body.classList.remove('auth');
   schema = await api<Schema>('/api/admin/schema');
   setHTML($('#app')!, html`<div class="shell">
-    <aside class="side" id="side"><div class="brand"><img src="/app/icons/logo.webp" alt=""><div><b>PKO Studio</b><small>Creator dashboard</small></div></div>
+    <aside class="side" id="side"><div class="brand"><img src="../app/icons/logo.webp" alt=""><div><b>PKO Studio</b><small>Creator dashboard</small></div></div>
       <nav>${navItem('#/', 'home', 'Overview')}${navItem('#/live', 'live', 'Live & chat')}
         <div class="navsec">Content</div>${schema.collections.map((c) => navItem(`#/c/${c.key}`, c.icon, c.label, c.moderated ? html`<span class="badge" data-pending hidden></span>` : ''))}
         <div class="navsec">Community</div>${navItem('#/comments', 'comment', 'Comments')}${navItem('#/members', 'users', 'Members')}
         <div class="navsec">Manage</div>${navItem('#/media', 'folder', 'Media library')}${navItem('#/settings', 'gear', 'App settings')}${navItem('#/team', 'shield', 'Team & password')}</nav>
-      <div class="side-foot"><a class="btn ghost sm block" href="/app/" target="_blank" rel="noopener">${ic('ext')}Open the app</a><div class="who">${me!.name}<small>${me!.email}</small></div><button class="btn ghost sm block" data-logout>${ic('logout')}Sign out</button></div></aside>
+      <div class="side-foot"><a class="btn ghost sm block" href="${APP_URL}" target="_blank" rel="noopener">${ic('ext')}Open the app</a><div class="who">${me!.name}<small>${me!.email}</small></div><button class="btn ghost sm block" data-logout>${ic('logout')}Sign out</button></div></aside>
     <div class="scrim" data-closeside></div>
     <div class="content"><header class="top"><button class="ib menu" data-openside aria-label="Menu">${ic('menu')}</button><h1 id="title"></h1><div id="actions" class="row"></div></header><main id="view" tabindex="-1"></main></div>
   </div>`);
@@ -102,10 +126,13 @@ const appLink = (c: Collection, id: string) => ({ posts: `#/article/${id}`, test
 /* ---------- overview ---------- */
 async function overview() {
   title('Overview');
+  liveRoom = supa.realtime().channel('live-room').onPresence((n) => { const el = $('[data-watching]'); if (el) el.textContent = String(n); });
   const s = await api<{ items: Record<string, Record<string, number>>; members: number; membersWeek: number; amens: number; amensWeek: number; comments: number; commentsWeek: number; pendingTestimonies: number; media: { n: number; bytes: number }; viewers: number; onAir: boolean; top: { id: string; collection: string; label: string; title: string; amens: number }[] }>('/api/admin/stats');
-  const stat = (label: string, n: number, sub: string) => html`<div class="stat"><span>${label}</span><b>${n.toLocaleString()}</b><small>${sub}</small></div>`;
+  const stat = (label: string, n: number, sub: string) => html`<div class="stat"><span>${label}</span><b ${label === 'Watching live' ? raw('data-watching') : ''}>${n.toLocaleString()}</b><small>${sub}</small></div>`;
+  const total = Object.values(s.items).reduce((a, x) => a + Object.values(x).reduce((b, n) => b + n, 0), 0);
   setHTML(view(), html`
   <div class="stats">${stat('Members', s.members, `+${s.membersWeek} this week`)}${stat('Amens', s.amens, `+${s.amensWeek} this week`)}${stat('Comments', s.comments, `+${s.commentsWeek} this week`)}${stat('Watching live', s.viewers, s.onAir ? 'On air now' : 'Off air')}</div>
+  ${total === 0 ? html`<div class="card attn" data-starter>${ic('upload')}<div><b>Your app is empty</b><span class="muted">Load the starter content from the original app (posts, books, albums, events, photos and the 4 TV clips) — then edit or delete anything.</span><div class="prog" hidden style="margin-top:10px"><i></i></div></div><button class="btn primary" data-import>Import starter content</button></div>` : ''}
   ${s.pendingTestimonies ? html`<a class="card attn" href="#/c/testimonies?pending">${ic('quote')}<div><b>${s.pendingTestimonies} testimon${s.pendingTestimonies === 1 ? 'y is' : 'ies are'} waiting for review</b><span class="muted">Approve them to publish in the app.</span></div></a>` : ''}
   <div class="card live-card ${s.onAir ? 'on' : ''}"><div><b>${s.onAir ? 'You are on air' : 'Transfiguration TV is off air'}</b><span class="muted">${s.onAir ? 'Members see the live service on the TV tab.' : 'Go live to show the stream and open the chat.'}</span></div><a class="btn ${s.onAir ? '' : 'primary'}" href="#/live">${ic('live')}Manage live</a></div>
   <h2 class="h2">Create</h2>
@@ -194,7 +221,7 @@ async function editor(key: string, id: string) {
   const status = item?.status || 'published';
   const statuses = ['published', 'draft', ...(c.moderated ? ['pending', 'rejected'] : [])];
   const link = item && appLink(c, item.id);
-  setHTML($('#actions')!, html`${link && item?.status === 'published' ? html`<a class="btn ghost" href="/app/${link}" target="_blank" rel="noopener">${ic('eye')}View in app</a>` : ''}<a class="btn ghost" href="#/c/${key}">${ic('back')}Back</a>`);
+  setHTML($('#actions')!, html`${link && item?.status === 'published' ? html`<a class="btn ghost" href="${APP_URL}${link}" target="_blank" rel="noopener">${ic('eye')}View in app</a>` : ''}<a class="btn ghost" href="#/c/${key}">${ic('back')}Back</a>`);
   setHTML(view(), html`<form class="editor" novalidate data-editor>
     <div class="ed-main card"><div data-form></div></div>
     <aside class="ed-side card">
@@ -217,9 +244,11 @@ async function editor(key: string, id: string) {
     if (form.busy) { toast('Wait for the upload to finish', 'err'); return; }
     const missing = form.missingRequired();
     if (Object.keys(missing).length) { form.showErrors(missing)?.scrollIntoView({ block: 'center', behavior: 'smooth' }); toast('Please fill in the required fields', 'err'); return; }
+    const v = validate(c.fields, form.state);
+    if (!v.ok) { form.showErrors(v.errors)?.scrollIntoView({ block: 'center', behavior: 'smooth' }); toast('Please fix the highlighted fields', 'err'); return; }
     const fd = new FormData(ed);
     const pub = String(fd.get('publishedAt') || '');
-    const body = { ...form.state, status: fd.get('status'), ...(pub ? { publishedAt: new Date(pub).toISOString() } : {}) };
+    const body = { ...v.data, status: fd.get('status'), ...(pub ? { publishedAt: new Date(pub).toISOString() } : {}) };
     const btn = $<HTMLButtonElement>('button[type=submit]', ed)!;
     btn.disabled = true;
     try {
@@ -245,7 +274,8 @@ async function editor(key: string, id: string) {
 /* ---------- live ---------- */
 async function livePage() {
   title('Live & chat');
-  const { live, viewers } = await api<{ live: Record<string, unknown>; viewers: number }>('/api/admin/live');
+  const { live } = await api<{ live: Record<string, unknown>; viewers: number }>('/api/admin/live');
+  const viewers = 0;
   const onAir = !!live.onAir;
   setHTML(view(), html`<div class="cols live">
     <section class="card"><div class="onair ${onAir ? 'on' : ''}"><div><b>${onAir ? 'On air' : 'Off air'}</b><span class="muted">${onAir ? 'Members can watch now and chat.' : 'The TV tab shows replays and the schedule.'}</span></div>
@@ -263,7 +293,9 @@ async function livePage() {
   $<HTMLFormElement>('[data-liveform]')!.onsubmit = async (e) => {
     e.preventDefault();
     if (form.busy) { toast('Wait for the upload to finish', 'err'); return; }
-    try { await api('/api/admin/live', { method: 'PUT', body: form.state }); form.dirty = false; toast('Stream details saved'); }
+    const v = validate(fields, form.state);
+    if (!v.ok) { form.showErrors(v.errors); toast('Please fix the highlighted fields', 'err'); return; }
+    try { await api('/api/admin/live', { method: 'PUT', body: v.data }); form.dirty = false; toast('Stream details saved'); }
     catch (err) { if (err instanceof ApiError && err.details) form.showErrors(err.details); toast((err as Error).message, 'err'); }
   };
   $('[data-onair]')!.onclick = async (e) => {
@@ -277,11 +309,20 @@ async function livePage() {
   const log = $('[data-chatlog]')!;
   const msg = (m: { id: number; name: string; body: string; isMod: boolean; createdAt: string }) =>
     html`<div class="cmsg" data-mid="${m.id}"><b class="${m.isMod ? 'mod' : ''}">${m.name}</b> <span>${m.body}</span><time class="muted">${new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><button class="ib danger" data-delmsg="${m.id}" aria-label="Remove message">${ic('trash', 'sm')}</button></div>`;
-  chatES = new EventSource('/api/live/stream');
-  chatES.addEventListener('hello', (e) => { const d = JSON.parse((e as MessageEvent).data); setHTML(log, d.messages.length ? html`${d.messages.map(msg)}` : html`<p class="muted" data-empty>No messages yet.</p>`); log.scrollTop = log.scrollHeight; });
-  chatES.addEventListener('message', (e) => { $('[data-empty]', log)?.remove(); log.insertAdjacentHTML('beforeend', msg(JSON.parse((e as MessageEvent).data)).s); log.scrollTop = log.scrollHeight; });
-  chatES.addEventListener('delete', (e) => $(`[data-mid="${JSON.parse((e as MessageEvent).data).id}"]`, log)?.remove());
-  chatES.addEventListener('viewers', (e) => { const v = $('[data-viewers]'); if (v) v.textContent = `${Math.max(0, JSON.parse((e as MessageEvent).data).viewers - 1)} watching`; });
+  const recent = (await api<{ messages: { id: number; name: string; body: string; isMod: boolean; createdAt: string }[] }>('/api/admin/chat')).messages;
+  setHTML(log, recent.length ? html`${recent.map(msg)}` : html`<p class="muted" data-empty>No messages yet.</p>`);
+  log.scrollTop = log.scrollHeight;
+  liveRoom = supa.realtime().channel('live-room', { changes: [{ event: '*', table: 'chat' }] })
+    .onChange((c) => {
+      const r = c.record;
+      if (c.type === 'INSERT' && !r.deleted) {
+        if ($(`[data-mid="${r.id}"]`, log)) return;
+        $('[data-empty]', log)?.remove();
+        log.insertAdjacentHTML('beforeend', msg({ id: Number(r.id), name: String(r.name), body: String(r.body), isMod: !!r.is_mod, createdAt: String(r.created_at) }).s);
+        log.scrollTop = log.scrollHeight;
+      } else if (c.type === 'UPDATE' && r.deleted) $(`[data-mid="${r.id}"]`, log)?.remove();
+    })
+    .onPresence((n) => { const v = $('[data-viewers]'); if (v) v.textContent = `${n} watching`; });
   log.onclick = async (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-delmsg]');
     if (!b) return;
@@ -297,7 +338,7 @@ async function livePage() {
     catch (err) { toast((err as Error).message, 'err'); }
   };
 }
-function stopChat() { chatES?.close(); chatES = null; }
+function stopChat() { liveRoom?.unsubscribe(); liveRoom = null; }
 
 /* ---------- media ---------- */
 async function mediaPage() {
@@ -318,13 +359,13 @@ async function mediaPage() {
     const t = (e.target as HTMLElement).closest<HTMLElement>('button');
     if (!t) return;
     if (t.dataset.kind !== undefined) { kind = t.dataset.kind; await draw(); return; }
-    if (t.dataset.copy) { await navigator.clipboard?.writeText(location.origin + mediaUrl(t.dataset.copy)).catch(() => {}); toast('Link copied'); return; }
+    if (t.dataset.copy) { await navigator.clipboard?.writeText(mediaUrl(t.dataset.copy)).catch(() => {}); toast('Link copied'); return; }
     if (t.dataset.delmedia) {
       const id = t.dataset.delmedia;
-      const { usedBy } = await api<{ usedBy: string[] }>(`/api/admin/media/${id}/usage`);
+      const { usedBy } = await api<{ usedBy: string[] }>(`/api/admin/media/${encodeURIComponent(id)}/usage`);
       const ok = await confirmDialog('Delete this file?', usedBy.length ? `It's still used by: ${usedBy.join('; ')}. Those items will lose this file.` : 'It is not used anywhere in the app.');
       if (!ok) return;
-      try { await api(`/api/admin/media/${id}${usedBy.length ? '?force=1' : ''}`, { method: 'DELETE' }); toast('File deleted'); await draw(); }
+      try { await api(`/api/admin/media/${encodeURIComponent(id)}${usedBy.length ? '?force=1' : ''}`, { method: 'DELETE' }); toast('File deleted'); await draw(); }
       catch (err) { toast((err as Error).message, 'err'); }
     }
   };
@@ -401,7 +442,9 @@ async function settingsPage() {
   form.render();
   $<HTMLFormElement>('[data-settings]')!.onsubmit = async (e) => {
     e.preventDefault();
-    try { await api('/api/admin/settings', { method: 'PUT', body: form.state }); form.dirty = false; toast('Settings saved'); }
+    const v = validate(schema.settings, form.state);
+    if (!v.ok) { form.showErrors(v.errors); toast('Please fix the highlighted fields', 'err'); return; }
+    try { await api('/api/admin/settings', { method: 'PUT', body: v.data }); form.dirty = false; toast('Settings saved'); }
     catch (err) { if (err instanceof ApiError && err.details) form.showErrors(err.details); toast((err as Error).message, 'err'); }
   };
 }
@@ -416,7 +459,7 @@ async function teamPage() {
     setHTML(view(), html`<div class="cols">
       <section class="card"><h2 class="h2">People with dashboard access</h2><table class="tbl"><tbody>${admins.map((a) => html`<tr><td><b>${a.name}</b><br><span class="muted small">${a.email}</span></td><td class="num">${a.id === me!.id ? html`<span class="muted">You</span>` : html`<button class="btn sm ghost danger" data-rmadmin="${a.id}">Remove</button>`}</td></tr>`)}</tbody></table>
         <h2 class="h2" style="margin-top:20px">Add a person</h2>
-        <form class="stack" data-addadmin novalidate><input class="inp" name="name" placeholder="Name" required aria-label="Name"><input class="inp" name="email" type="email" placeholder="Email" required aria-label="Email"><input class="inp" name="password" type="password" placeholder="Temporary password (10+ characters)" minlength="10" required aria-label="Temporary password" autocomplete="new-password"><button class="btn primary">${ic('plus')}Give access</button><small class="muted">Share the password with them privately; they can change it here.</small></form></section>
+        <form class="stack" data-addadmin novalidate><input class="inp" name="name" placeholder="Name" required aria-label="Name"><input class="inp" name="email" type="email" placeholder="Email" required aria-label="Email"><button class="btn primary">${ic('plus')}Give access</button><small class="muted">First ask them to open this dashboard and choose <b>Create an account</b> with this email. Then add them here.</small></form></section>
       <section class="card"><h2 class="h2">Change your password</h2><form class="stack" data-pw novalidate><input class="inp" name="current" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"><input class="inp" name="next" type="password" placeholder="New password (10+ characters)" autocomplete="new-password" aria-label="New password"><button class="btn primary">Update password</button></form></section></div>`);
   };
   await draw();
@@ -443,16 +486,42 @@ document.addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(f);
   const err = $('[data-loginerr]')!;
-  const btn = $<HTMLButtonElement>('button', f)!;
+  const btn = $<HTMLButtonElement>('button[type=submit]', f)!;
   btn.disabled = true;
+  const email = String(fd.get('email') || '').trim(), password = String(fd.get('password') || '');
   try {
-    me = (await api<{ admin: Admin }>('/api/admin/login', { method: 'POST', body: { email: fd.get('email'), password: fd.get('password') } })).admin;
+    if (f.dataset.mode === 'create') {
+      pendingName = String(fd.get('name') || '');
+      const r = await createAccount(email, password, pendingName);
+      if (r === 'confirm-email') { showLogin(`Check ${email} for a confirmation link, then sign in here.`); return; }
+    }
+    me = (await api<{ admin: Admin }>('/api/admin/login', { method: 'POST', body: { email, password } })).admin;
     await startApp();
-  } catch (x) { err.hidden = false; err.textContent = (x as Error).message; btn.disabled = false; }
+  } catch (x) {
+    if (x instanceof NotAdminError) { showNoAccess(x.hasOwner, x.email); return; }
+    err.hidden = false; err.textContent = (x as Error).message; btn.disabled = false;
+  }
 });
 document.addEventListener('click', async (e) => {
-  const t = (e.target as HTMLElement).closest<HTMLElement>('[data-logout],[data-openside],[data-closeside],[data-reload]');
+  const t = (e.target as HTMLElement).closest<HTMLElement>('[data-logout],[data-openside],[data-closeside],[data-reload],[data-loginmode],[data-claim],[data-import]');
   if (!t) return;
+  if (t.dataset.loginmode) { showLogin('', t.dataset.loginmode as 'signin' | 'create'); return; }
+  if (t.hasAttribute('data-import')) {
+    const card = t.closest('[data-starter]')!;
+    const prog = $('.prog', card)!, bar = $('i', prog) as HTMLElement;
+    (t as HTMLButtonElement).disabled = true; t.textContent = 'Importing…'; prog.hidden = false;
+    try {
+      const n = await importStarterContent((d, total) => { bar.style.width = Math.round((d / total) * 100) + '%'; });
+      toast(`Imported ${n} items`); refreshPending(); route();
+    } catch (x) { toast((x as Error).message, 'err'); (t as HTMLButtonElement).disabled = false; t.textContent = 'Try again'; }
+    return;
+  }
+  if (t.hasAttribute('data-claim')) {
+    (t as HTMLButtonElement).disabled = true;
+    try { me = (await claimOwner(String($<HTMLInputElement>('[name=ownername]')?.value || ''))) as unknown as Admin; await startApp(); }
+    catch (x) { const el = $('[data-claimerr]'); if (el) { el.hidden = false; el.textContent = (x as Error).message; } (t as HTMLButtonElement).disabled = false; }
+    return;
+  }
   if (t.hasAttribute('data-logout')) { await api('/api/admin/logout', { method: 'POST' }).catch(() => {}); me = null; showLogin(); }
   if (t.hasAttribute('data-openside')) document.body.classList.add('side-open');
   if (t.hasAttribute('data-closeside')) document.body.classList.remove('side-open');

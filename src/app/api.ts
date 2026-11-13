@@ -1,6 +1,7 @@
 import { getItem, setItem } from './native.js';
+import { Supa, SupaError } from '../shared/supa.js';
 
-/* ---------- content types (mirror server/src/schema.ts) ---------- */
+/* ---------- content types (mirror src/shared/schema.ts) ---------- */
 interface Base { id: string; publishedAt: string }
 export interface Post extends Base { title: string; flair: string; verse: string | null; ref: string | null; body: string[]; image: string | null; imagePos: string | null }
 export interface Broadcast extends Base { title: string; ref: string | null; category: string; video: string | null; url: string | null; poster: string }
@@ -23,87 +24,68 @@ export interface Comment { id: string; name: string; body: string; parentId: str
 export interface ChatMsg { id: number; name: string; body: string; isMod: boolean; createdAt: string }
 export interface Member { id: string; name: string }
 
-/* ---------- client ---------- */
-const cfg = (window as unknown as { PKO_CONFIG?: { apiBase?: string } }).PKO_CONFIG || {};
-export const API_BASE: string = (cfg.apiBase || '').replace(/\/$/, '');
-export const mediaUrl = (id: string | null | undefined): string => (id ? `${API_BASE}/media/${encodeURIComponent(id)}` : '');
-/** Public link for sharing. Native builds share the hosted web app URL. */
-export const shareUrl = (path: string): string => `${API_BASE || location.origin}/app/#${path}`;
+/* ---------- Supabase connection ---------- */
+const cfg = (window as unknown as { PKO_CONFIG?: { supabaseUrl?: string; supabaseAnonKey?: string; appUrl?: string } }).PKO_CONFIG || {};
+export const supa = new Supa(cfg.supabaseUrl || '', cfg.supabaseAnonKey || '', { get: getItem, set: setItem }, 'pko.session');
+export const ApiError = SupaError;
+export type ApiError = SupaError;
 
-export class ApiError extends Error {
-  status: number;
-  details?: Record<string, string>;
-  constructor(status: number, message: string, details?: Record<string, string>) { super(message); this.status = status; this.details = details; }
+export const mediaUrl = (id: string | null | undefined): string => (id ? (/^https?:\/\//.test(id) ? id : supa.publicUrl(id)) : '');
+/** Link that opens the web app on a given screen (shared from the native app too). */
+export const shareUrl = (path: string): string => `${(cfg.appUrl || location.origin + location.pathname).replace(/#.*$/, '')}#${path}`;
+
+/** Guests get an anonymous Supabase account the first time they Amen something. */
+async function ensureSession(): Promise<void> {
+  if (!supa.session) await supa.signInAnonymously();
 }
 
-export function deviceId(): string {
-  let id = getItem('pko.device');
-  if (!id) {
-    id = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''));
-    setItem('pko.device', id);
-  }
-  return id;
-}
-export const token = (): string | null => getItem('pko.token');
-
-export async function api<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number; headers?: Record<string, string> } = {}): Promise<T> {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), opts.timeout ?? 15000);
-  const headers: Record<string, string> = { 'X-Device-Id': deviceId(), ...opts.headers };
-  const t = token();
-  if (t) headers.Authorization = 'Bearer ' + t;
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
-  let res: Response;
-  try {
-    res = await fetch(API_BASE + path, { method: opts.method || 'GET', headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body), signal: ctl.signal });
-  } catch {
-    throw new ApiError(0, navigator.onLine ? "Couldn't reach the server. Please try again." : "You're offline. Check your connection and try again.");
-  } finally { clearTimeout(timer); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (res.status === 401 && t && path !== '/api/members') setItem('pko.token', null);
-    throw new ApiError(res.status, (data as { error?: string }).error || 'Something went wrong', (data as { details?: Record<string, string> }).details);
-  }
-  return data as T;
-}
-
-/** Upload with progress (fetch has no upload progress, so XHR it is). */
-export function upload(path: string, file: File, onProgress: (p: number) => void): Promise<{ id: string }> {
-  return new Promise((resolve, reject) => {
-    const x = new XMLHttpRequest();
-    x.open('PUT', `${API_BASE}${path}?name=${encodeURIComponent(file.name)}`);
-    x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-    x.setRequestHeader('X-Device-Id', deviceId());
-    const t = token();
-    if (t) x.setRequestHeader('Authorization', 'Bearer ' + t);
-    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
-    x.onload = () => {
-      let d: { id?: string; error?: string } = {};
-      try { d = JSON.parse(x.responseText); } catch { /* ignore */ }
-      if (x.status >= 200 && x.status < 300 && d.id) resolve({ id: d.id }); else reject(new ApiError(x.status, d.error || 'Upload failed'));
-    };
-    x.onerror = () => reject(new ApiError(0, 'Upload failed. Check your connection.'));
-    x.send(file);
-  });
-}
-
-/* ---------- content bundle with offline cache + ETag revalidation ---------- */
+/* ---------- content bundle with offline cache ---------- */
 const CACHE_KEY = 'pko.bundle';
 export function cachedBundle(): Bundle | null {
   try { const s = getItem(CACHE_KEY); return s ? (JSON.parse(s) as Bundle) : null; } catch { return null; }
 }
 export async function fetchBundle(current: Bundle | null): Promise<{ bundle: Bundle; changed: boolean }> {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 15000);
-  try {
-    const res = await fetch(API_BASE + '/api/bundle', { headers: current ? { 'If-None-Match': `W/"v${current.version}"` } : {}, signal: ctl.signal, cache: 'no-cache' });
-    if (res.status === 304 && current) return { bundle: current, changed: false };
-    if (!res.ok) throw new ApiError(res.status, 'Could not load content');
-    const b = (await res.json()) as Bundle;
-    try { setItem(CACHE_KEY, JSON.stringify(b)); } catch { /* storage full: still usable in memory */ }
-    return { bundle: b, changed: !current || current.version !== b.version || JSON.stringify(current.amens) !== JSON.stringify(b.amens) };
-  } catch (e) {
-    if (e instanceof ApiError) throw e;
-    throw new ApiError(0, 'offline');
-  } finally { clearTimeout(timer); }
+  const b = await supa.rpc<Bundle>('get_bundle', {}, { anon: !supa.session });
+  try { setItem(CACHE_KEY, JSON.stringify(b)); } catch { /* storage full: still usable in memory */ }
+  const changed = !current || current.version !== b.version || JSON.stringify(current.amens) !== JSON.stringify(b.amens)
+    || JSON.stringify(current.comments) !== JSON.stringify(b.comments) || JSON.stringify(current.live) !== JSON.stringify(b.live);
+  return { bundle: b, changed };
+}
+
+/* ---------- reads ---------- */
+export const getChapter = (book: string, chapter: string) => supa.rpc<{ id: string; title: string; body: string[]; index: number }>('get_chapter', { p_book: book, p_chapter: chapter });
+export const getComments = (target: string) => supa.rpc<Comment[]>('get_comments', { p_target: target });
+export const getLive = () => supa.rpc<{ live: Live; messages: ChatMsg[] }>('get_live');
+export async function myAmens(): Promise<string[]> { return supa.session ? supa.rpc<string[]>('my_amens') : []; }
+
+/* ---------- member actions ---------- */
+export async function signInMember(name: string, phone: string): Promise<Member> {
+  await ensureSession();
+  try { return await supa.rpc<Member>('set_profile', { p_name: name, p_phone: phone || null }); }
+  catch (e) {
+    // A stale session (e.g. project reset) — start fresh once.
+    if (e instanceof SupaError && (e.status === 401 || e.status === 403)) { await supa.signOut(); await supa.signInAnonymously(); return supa.rpc<Member>('set_profile', { p_name: name, p_phone: phone || null }); }
+    throw e;
+  }
+}
+export async function signOutMember(): Promise<void> { await supa.signOut(); }
+export async function toggleAmen(target: string, on: boolean): Promise<{ on: boolean; count: number }> {
+  await ensureSession();
+  return supa.rpc('toggle_amen', { p_target: target, p_on: on });
+}
+export const postComment = (target: string, body: string, parentId?: string | null) => supa.rpc<Comment>('post_comment', { p_target: target, p_body: body, p_parent: parentId || null });
+export const deleteComment = (id: string) => supa.rpc('delete_comment', { p_id: id });
+export const postChat = (body: string) => supa.rpc<ChatMsg>('post_chat', { p_body: body });
+export const submitTestimony = (t: { title: string; body: string; name?: string; place?: string; video?: string | null }) =>
+  supa.rpc<{ id: string; status: string }>('submit_testimony', { p_title: t.title, p_body: t.body, p_place: t.place || null, p_name: t.name || null, p_video: t.video || null });
+
+/** Members upload a testimony video into their own folder, then register it. */
+export async function uploadTestimonyVideo(file: File, onProgress: (p: number) => void): Promise<string> {
+  if (!supa.session) throw new SupaError(401, 'Please sign in first');
+  const ext = (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'mp4';
+  const path = `members/${supa.session.user.id}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const type = file.type || (ext === 'mov' ? 'video/quicktime' : 'video/mp4');
+  await supa.upload(path, file, onProgress, { contentType: type });
+  await supa.rpc('register_member_upload', { p_path: path, p_mime: type, p_size: file.size, p_name: file.name });
+  return path;
 }

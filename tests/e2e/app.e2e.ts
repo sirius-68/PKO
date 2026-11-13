@@ -17,8 +17,7 @@ const issues: string[] = [];
 before(async () => {
   srv = await startTestServer();
   browser = await launch();
-  admin = new Client(srv.base);
-  await admin.loginAdmin();
+  admin = srv.admin;
 });
 after(async () => {
   await browser?.close();
@@ -136,7 +135,7 @@ describe('reading & engagement', () => {
     const id = (await card.getAttribute('data-page'))!.split(':')[1];
     const amen = card.locator(`[data-amen="${id}"]`);
     const before = Number((await amen.locator('em').textContent())!.replace('k', '')) || 0;
-    const resp = page.waitForResponse((r) => r.url().endsWith('/api/amens'));
+    const resp = page.waitForResponse((r) => r.url().endsWith('/rpc/toggle_amen'));
     await amen.click();
     await expectToast(page, 'Amen');
     assert.equal(await amen.getAttribute('aria-pressed'), 'true');
@@ -147,7 +146,7 @@ describe('reading & engagement', () => {
     await card.locator(`[data-share="${id}"]`).click();
     await sleep(300);
     // the server agrees
-    assert.equal((await admin.req('GET', '/api/bundle')).json.amens[id], before + 1);
+    assert.equal((await admin.bundle()).amens[id], before + 1);
     await page.reload();
     await page.waitForSelector('#shell:not([hidden]) #feed');
     assert.equal(await page.locator(`#feed [data-amen="${id}"]`).first().getAttribute('aria-pressed'), 'true', 'Amen remembered');
@@ -159,10 +158,10 @@ describe('reading & engagement', () => {
     // un-Amen
     await page.click('.page.in .row');
     await page.waitForSelector(`.page.in [data-amen="${id}"]`);
-    const resp2 = page.waitForResponse((r) => r.url().endsWith('/api/amens'));
+    const resp2 = page.waitForResponse((r) => r.url().endsWith('/rpc/toggle_amen'));
     await page.locator(`.page.in [data-amen="${id}"]`).click();
     await resp2;
-    assert.equal((await admin.req('GET', '/api/bundle')).json.amens[id] || 0, before);
+    assert.equal((await admin.bundle()).amens[id] || 0, before);
     expectClean('engagement monitor', mon.take());
     await ctx.close();
   });
@@ -192,6 +191,12 @@ describe('reading & engagement', () => {
     assert.equal(await page.textContent('.page.in [data-ccount]'), '2');
     await shot(page, 'app-comments');
     expectClean('comments layout', await auditLayout(page, 'comments'));
+    // still signed in after the app restarts (session restored from device storage)
+    await page.reload();
+    await page.waitForSelector('#shell:not([hidden]) .tab');
+    assert.equal((await page.textContent('.topbar .me'))!.trim(), 'G', 'still signed in after restart');
+    await page.click('#feed article[data-page^="article:"] [data-open-comments]');
+    await page.waitForSelector('.page.in form.compose input[name=body]');
     // delete own top comment removes the thread
     await page.locator('.page.in .cm:not(.reply) [data-delcomment]').click();
     await page.waitForSelector('.page.in [data-comments] .empty');
@@ -223,12 +228,12 @@ describe('Transfiguration TV', () => {
     await page.fill('#chatIn', 'Watching from Kumasi');
     await page.press('#chatIn', 'Enter');
     await page.waitForSelector('#chat .cmsg.mine:has-text("Watching from Kumasi")');
-    await admin.admin('POST', '/api/admin/chat', { body: 'Welcome, family!', name: 'Pastor Ruth' });
+    await admin.rpcOk('admin_chat_post', { p_body: 'Welcome, family!', p_name: 'Pastor Ruth' });
     await page.waitForSelector('#chat .cmsg b.mod:has-text("Pastor Ruth")');
     await shot(page, 'app-tv-live-chat');
     // moderator deletes a message → disappears for everyone
-    const msgs = (await admin.admin('GET', '/api/admin/chat')).json.messages;
-    await admin.admin('DELETE', `/api/admin/chat/${msgs.find((m: { body: string }) => m.body === 'Watching from Kumasi').id}`);
+    const msgs = (await admin.rpcOk('get_live')).messages;
+    await admin.rpcOk('admin_chat_delete', { p_id: msgs.find((m: { body: string }) => m.body === 'Watching from Kumasi').id });
     await page.waitForSelector('#chat .cmsg:has-text("Watching from Kumasi")', { state: 'detached' });
     // replays
     await page.click('[data-tvpane="past"]');
@@ -246,11 +251,11 @@ describe('Transfiguration TV', () => {
     await page.click('[data-golive]');
     await page.waitForSelector('.player .live-pill');
     // the media team ends the service: the app updates without a reload
-    await admin.admin('PUT', '/api/admin/live', { onAir: false });
+    await admin.rpcOk('admin_save_live', { p: { onAir: false } });
     await page.waitForSelector('.offair', { timeout: 8000 });
     assert.equal(await page.isVisible('.tab .dot'), false, 'live dot removed');
     await shot(page, 'app-tv-offair');
-    await admin.admin('PUT', '/api/admin/live', { onAir: true });
+    await admin.rpcOk('admin_save_live', { p: { onAir: true } });
     await page.waitForSelector('.player .live-pill', { timeout: 8000 });
     expectClean('tv monitor', mon.take());
     await ctx.close();
@@ -260,13 +265,13 @@ describe('Transfiguration TV', () => {
 describe('music', () => {
   test('songs without audio say "coming soon"; uploaded audio plays with mini player, skip and seek', async () => {
     // give the newest album's first two tracks real audio
-    const albums = (await admin.admin('GET', '/api/admin/items/albums')).json.items;
+    const albums = await admin.rpcOk('admin_list', { p_collection: 'albums' });
     const album = albums[0];
-    const a1 = (await admin.admin('PUT', '/api/admin/media?name=one.wav', FILES.wav(6), { 'Content-Type': 'audio/wav' })).json.media.id;
-    const a2 = (await admin.admin('PUT', '/api/admin/media?name=two.wav', FILES.wav(4), { 'Content-Type': 'audio/wav' })).json.media.id;
+    const a1 = await admin.uploadMedia('one.wav', FILES.wav(6), 'audio/wav');
+    const a2 = await admin.uploadMedia('two.wav', FILES.wav(4), 'audio/wav');
     album.tracks[0].audio = a1; album.tracks[0].duration = 6;
     album.tracks[1].audio = a2; album.tracks[1].duration = 4;
-    await admin.admin('PATCH', `/api/admin/items/albums/${album.id}`, { tracks: album.tracks });
+    await admin.rpcOk('admin_save', { p_collection: 'albums', p_id: album.id, p_data: { tracks: album.tracks } });
 
     const { ctx, page, mon } = await newPage(browser, 'pixel-7', srv.base, { onboarded: true });
     await enter(page);
@@ -340,8 +345,10 @@ describe('events & gallery', () => {
     await page.waitForSelector('#sheet.on .evmeta');
     await page.click('#sheet [data-evremind]');
     await expectToast(page, 'Reminder set');
-    const [icsReq] = await Promise.all([ctx.waitForEvent('request', { predicate: (r) => r.url().includes('.ics'), timeout: 5000 }), page.click('#sheet [data-ics]')]);
-    assert.match(icsReq.url(), /\/api\/events\/.+\.ics$/);
+    const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }), page.click('#sheet [data-ics]')]);
+    assert.match(dl.suggestedFilename(), /\.ics$/);
+    const ics = await (await import('node:fs/promises')).readFile((await dl.path())!, 'utf8');
+    assert.match(ics, /BEGIN:VEVENT[\s\S]*DTSTART:20261115T090000[\s\S]*SUMMARY:Sunday Encounter Service/);
     for (const p of ctx.pages()) if (p !== page) await p.close();
     await page.keyboard.press('Escape');
     await page.waitForSelector('#sheet:not(.on)');
@@ -395,10 +402,10 @@ describe('testimonies', () => {
     await page.click('.page.in [data-wtab="text"]');
     await page.click('.page.in button[type=submit]');
     await expectToast(page, /sent for review/);
-    const pending = (await admin.admin('GET', '/api/admin/items/testimonies?status=pending')).json.items;
+    const pending = await admin.rpcOk('admin_list', { p_collection: 'testimonies', p_status: 'pending' });
     const mine = pending.find((t: { title: string }) => t.title === 'A door opened');
     assert.ok(mine, 'arrives in moderation');
-    await admin.admin('PATCH', `/api/admin/items/testimonies/${mine.id}`, { status: 'published' });
+    await admin.rpcOk('admin_save', { p_collection: 'testimonies', p_id: mine.id, p_data: {}, p_status: 'published' });
     // pull to refresh on the home feed
     await page.evaluate(() => { const m = document.querySelector('#main')!; m.scrollTop = 0; });
     await swipe(page, '#main', 150, 150, 150, 300);
@@ -459,7 +466,7 @@ describe('search, theme, back button, deep links, offline', () => {
     await ctx.close();
   });
   test('shared deep link opens the article directly', async () => {
-    const id = (await admin.req('GET', '/api/bundle')).json.posts[0].id;
+    const id = (await admin.bundle()).posts[0].id;
     const { ctx, page, mon } = await newPage(browser, 'iphone-13', srv.base, { onboarded: true });
     await page.goto(`${APP()}#/article/${id}`);
     await page.waitForSelector(`.page.in [data-amen="${id}"]`, { timeout: 15000 });
@@ -470,7 +477,7 @@ describe('search, theme, back button, deep links, offline', () => {
   test('works offline from saved content', async () => {
     const { ctx, page } = await newPage(browser, 'iphone-13', srv.base, { onboarded: true });
     await enter(page);
-    await ctx.route('**/api/**', (r) => r.abort('internetdisconnected'));
+    await ctx.route('**/rest/v1/**', (r) => r.abort('internetdisconnected'));
     await page.reload();
     await page.waitForSelector('#shell:not([hidden]) #feed article', { timeout: 15000 });
     await expectToast(page, /offline/i);
@@ -478,11 +485,11 @@ describe('search, theme, back button, deep links, offline', () => {
   });
   test('first launch with no connection shows a retry screen', async () => {
     const { ctx, page } = await newPage(browser, 'iphone-13', srv.base);
-    await ctx.route('**/api/**', (r) => r.abort('internetdisconnected'));
+    await ctx.route('**/rest/v1/**', (r) => r.abort('internetdisconnected'));
     await page.goto(APP());
     await page.waitForSelector('[data-retry]', { timeout: 15000 });
     await shot(page, 'app-no-connection');
-    await ctx.unroute('**/api/**');
+    await ctx.unroute('**/rest/v1/**');
     await page.click('[data-retry]');
     await page.waitForSelector('#onboard:not([hidden])', { timeout: 15000 });
     await ctx.close();
